@@ -1,0 +1,6 @@
+[package]
+name = "convolutional-code"
+version = "0.1.0"
+authors = ["kc1212 <kc1212@users.noreply.github.com>"]
+
+[dependencies]
