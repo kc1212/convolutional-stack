@@ -2,6 +2,7 @@
 #![crate_name = "convolutional_code"]
 
 use std::io::Error;
+use std::f64;
 
 pub fn encode(xs: &Vec<u8>, gs: &Vec<Vec<u8>>) -> Vec<u8> {
     let mut c: Vec<u8> = Vec::new();
@@ -25,13 +26,13 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-pub fn decode(cs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64) -> Vec<u8> {
+pub fn decode(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
     let mut stack = Vec::new();
-    stack.push(CodePath { path: Vec::new(), mu: ::std::f64::NEG_INFINITY });
+    stack.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
     loop {
         let (mut p1, mut p2) = stack.remove(0).split();
-        p1.fano(cs, gs, p);
-        p2.fano(cs, gs, p);
+        p1.fano(obs, gs, p, r);
+        p2.fano(obs, gs, p, r);
         stack.push(p1);
         stack.push(p2);
         stack.sort_by(|a, b| a.mu.partial_cmp(&b.mu).unwrap()); // we shouldn't see NaN here so ok to unwrap
@@ -57,11 +58,19 @@ impl CodePath {
         (p1, p2)
     }
 
-    fn fano(&mut self, cs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64) -> f64 {
-        let code = encode(&self.path, gs);
-        // TODO compare code with cs
-        // TODO update self.mu
-        unimplemented!()
+    fn fano(&mut self, ys: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> f64 {
+        let xs = encode(&self.path, gs);
+        // let n = xs.len() as f64;
+        let mut res = 0f64;
+        // println!("xs: {:?}, res: {}", xs, res);
+        for (x, y) in xs.iter().zip(ys.iter()) {
+            if x == y {
+                res += (2f64 * (1f64 - p)).log2();
+            } else {
+                res += (2f64 * p).log2();
+            }
+        }
+        res - (xs.len() as f64) * r
     }
 }
 
@@ -96,4 +105,15 @@ fn test_source() {
 
     let xs2 = vec![1, 0, 1, 0, 0, 0];
     assert_eq!(encode(&xs2, &gs), vec![1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
+}
+
+#[test]
+fn test_fano() {
+    // TODO check
+    let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
+    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let p = 1f64/16f64;
+    let r = 1f64/3f64;
+    let mut path = CodePath { path: vec![0, 0, 0, 0], mu: 0f64 };
+    assert_eq!(-16.6, path.fano(&obs, &gs, p, r));
 }
