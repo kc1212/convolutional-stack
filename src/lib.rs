@@ -28,34 +28,50 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
 
 pub fn decode(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
     let mut stack = Vec::new();
+    let n = gs.len();
+    let m = gs[0].len() - 1;
+    let l = obs.len() / n - m;
+    println!("n {}, m {}, l {}", n, m, l);
+
     stack.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
     loop {
-        let (mut p1, mut p2) = stack.remove(0).split();
-        p1.fano(obs, gs, p, r);
-        p2.fano(obs, gs, p, r);
-        stack.push(p1);
-        stack.push(p2);
+        let last = stack.pop().unwrap();
+        if last.path.len() >= m + l {
+            return last.path;
+        }
+        let paths = last.extend(n);
+        for mut path in paths {
+            path.fano(obs, gs, p, r);
+            stack.push(path);
+        }
         stack.sort_by(|a, b| a.mu.partial_cmp(&b.mu).unwrap()); // we shouldn't see NaN here so ok to unwrap
-        // TODO stop at some point...
+        println!("stack {:?}", stack);
     }
-    stack.remove(0).path
 }
 
 /// A path in the tree
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CodePath {
     path: Vec<u8>,
     mu: f64,
 }
 
 impl CodePath {
-    /// Consumes myself and split to two
-    fn split(self) -> (CodePath, CodePath) {
-        let mut p1 = self;
-        let mut p2 = p1.clone();
-        p1.path.push(0);
-        p2.path.push(1);
-        (p1, p2)
+    /// Consumes myself and create new branches
+    fn extend(mut self, n: usize) -> Vec<CodePath> {
+        let mut v = Vec::new();
+        if self.path.len() < n {
+            let mut p1 = self;
+            let mut p2 = p1.clone();
+            p1.path.push(0);
+            p2.path.push(1);
+            v.push(p1);
+            v.push(p2);
+        } else {
+            self.path.push(0);
+            v.push(self);
+        }
+        v
     }
 
     fn fano(&mut self, ys: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> f64 {
@@ -70,7 +86,8 @@ impl CodePath {
                 res += (2f64 * p).log2();
             }
         }
-        res - (xs.len() as f64) * r
+        self.mu = res - (xs.len() as f64) * r;
+        self.mu
     }
 }
 
@@ -108,12 +125,21 @@ fn test_source() {
 }
 
 #[test]
+fn test_decode() {
+    let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
+    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let p = 1f64/16f64;
+    let r = 1f64/3f64;
+    assert_eq!(vec![1,1,0,0], decode(&obs, &gs, p, r));
+}
+
+#[test]
 fn test_fano() {
-    // TODO check
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
     let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
     let p = 1f64/16f64;
     let r = 1f64/3f64;
     let mut path = CodePath { path: vec![0, 0, 0, 0], mu: 0f64 };
+    // TODO fix
     assert_eq!(-16.6, path.fano(&obs, &gs, p, r));
 }
