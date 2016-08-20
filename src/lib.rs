@@ -5,6 +5,8 @@ extern crate rand;
 
 use std::io::Error;
 use std::f64;
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 use rand::random;
 
 fn encode_inner(xs: &Vec<u8>, gs: &Vec<Vec<u8>>) -> Vec<u8> {
@@ -40,15 +42,15 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
 }
 
 fn decode_inner(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
-    let mut stack = Vec::new();
+    let mut heap = BinaryHeap::new();
     let n = gs.len();
     let m = gs[0].len() - 1;
     let l = obs.len() / n - m;
     println!("n {}, m {}, l {}", n, m, l);
 
-    stack.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
+    heap.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
     loop {
-        let last = stack.pop().unwrap();
+        let last = heap.pop().unwrap();
         if last.path.len() >= m + l {
             println!("path {:?}, mu {:?}", last.path, last.mu);
             return last.path;
@@ -56,10 +58,9 @@ fn decode_inner(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
         let paths = last.extend(l);
         for mut path in paths {
             path.fano(obs, gs, p, r);
-            stack.push(path);
+            heap.push(path);
         }
-        stack.sort_by(|a, b| a.mu.partial_cmp(&b.mu).unwrap()); // we shouldn't see NaN here so ok to unwrap
-        println!("stack {:?}", stack);
+        println!("stack {:?}", heap);
     }
 }
 
@@ -78,6 +79,27 @@ pub fn decode(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
 struct CodePath {
     path: Vec<u8>,
     mu: f64,
+}
+
+impl PartialEq for CodePath {
+    fn eq(&self, other: &CodePath) -> bool {
+        f64_eq(self.mu, other.mu, 1e-6)
+    }
+}
+
+impl Eq for CodePath {}
+
+impl PartialOrd for CodePath {
+    fn partial_cmp(&self, other: &CodePath) -> Option<Ordering> {
+        self.mu.partial_cmp(&other.mu)
+    }
+}
+
+// Implementation for Ord is required BinaryHeap
+impl Ord for CodePath {
+    fn cmp(&self, other: &CodePath) -> Ordering {
+        self.mu.partial_cmp(&other.mu).unwrap()
+    }
 }
 
 impl CodePath {
@@ -123,6 +145,7 @@ fn deserialise(input: &str) -> Result<Vec<u8>, Error> {
         match s {
             '0' => res.push(0),
             '1' => res.push(1),
+            ' ' | ',' => (),
             _   => return Err(Error::new(InvalidData, "Must be '0' or '1'")),
         }
     }
@@ -205,10 +228,10 @@ fn test_system() {
     // TODO randomise these
     let orig = vec![0,1,0,1];
     let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
-    let p = 1f64/16f64;
-    let r = 1f64/(gs.len() as f64);
+    let p = 1f64/10f64;
+    let r = 1f64/gs.len() as f64;
 
-    let ys = encode(&orig, &gs);
+    let ys = add_noise(encode(&orig, &gs), p);
     println!("ys {:?}", ys);
     let xs = decode(&ys, &gs, p, r);
     assert_eq!(orig, xs);
