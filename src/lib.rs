@@ -50,15 +50,16 @@ fn decode_inner(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
     loop {
         let last = stack.pop().unwrap();
         if last.path.len() >= m + l {
+            println!("path {:?}, mu {:?}", last.path, last.mu);
             return last.path;
         }
-        let paths = last.extend(n);
+        let paths = last.extend(l);
         for mut path in paths {
             path.fano(obs, gs, p, r);
             stack.push(path);
         }
         stack.sort_by(|a, b| a.mu.partial_cmp(&b.mu).unwrap()); // we shouldn't see NaN here so ok to unwrap
-        // println!("stack {:?}", stack);
+        println!("stack {:?}", stack);
     }
 }
 
@@ -81,9 +82,9 @@ struct CodePath {
 
 impl CodePath {
     /// Consumes myself and create new branches
-    fn extend(mut self, n: usize) -> Vec<CodePath> {
+    fn extend(mut self, l: usize) -> Vec<CodePath> {
         let mut v = Vec::new();
-        if self.path.len() < n {
+        if self.path.len() < l {
             let mut p1 = self;
             let mut p2 = p1.clone();
             p1.path.push(0);
@@ -161,11 +162,11 @@ fn test_encode1() {
 #[test]
 fn test_encode2() {
     let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
-    let xs1 = vec![1, 1, 1, 0, 0, 0];
-    assert_eq!(encode_inner(&xs1, &gs), vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0]);
+    let xs1 = vec![1, 1, 1, 0];
+    assert_eq!(encode(&xs1, &gs), vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0]);
 
-    let xs2 = vec![1, 0, 1, 0, 0, 0];
-    assert_eq!(encode_inner(&xs2, &gs), vec![1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
+    let xs2 = vec![1, 0, 1, 0];
+    assert_eq!(encode(&xs2, &gs), vec![1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
 }
 
 #[test]
@@ -174,7 +175,7 @@ fn test_decode() {
     let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
     let p = 1f64/16f64;
     let r = 1f64/3f64;
-    assert_eq!(vec![1,1,0,0], decode_inner(&obs, &gs, p, r));
+    assert_eq!(vec![1,1], decode(&obs, &gs, p, r));
 }
 
 #[test]
@@ -202,13 +203,13 @@ fn test_fano() {
 #[test]
 fn test_system() {
     // TODO randomise these
-    // let orig = vec![0,1,0,1]; // TODO doesn't work
-    let orig = vec![0,1];
+    let orig = vec![0,1,0,1];
     let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
     let p = 1f64/16f64;
     let r = 1f64/(gs.len() as f64);
 
-    let ys = add_noise(encode(&orig, &gs), p);
+    let ys = encode(&orig, &gs);
+    println!("ys {:?}", ys);
     let xs = decode(&ys, &gs, p, r);
     assert_eq!(orig, xs);
 }
