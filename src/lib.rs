@@ -1,12 +1,29 @@
 #![crate_type = "lib"]
 #![crate_name = "convolutional_code"]
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
 
+
+extern crate serde;
+extern crate serde_json;
 extern crate rand;
 
-use std::io::Error;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
+
+#[derive(Deserialize)]
+pub struct Input {
+    pub gs: Vec<Vec<u8>>,
+    pub xs: Vec<u8>,
+    pub p: f64,
+}
+
+#[derive(Serialize)]
+pub struct Output {
+    pub code: Vec<u8>,
+    // paths: Vec<CodePath>,
+}
 
 pub struct Gens {
     gs: Vec<Vec<u8>>,
@@ -15,7 +32,8 @@ pub struct Gens {
 }
 
 impl Gens {
-    fn new(gs: Vec<Vec<u8>>) -> Gens {
+    pub fn new(gs: Vec<Vec<u8>>) -> Gens {
+        // TODO make sure the generators are of the same length
         Gens {
             m: gs[0].len() - 1,
             n: gs.len(),
@@ -56,9 +74,10 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
+fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
+    let r = 1f64 / gs.n as f64;
     // println!("n {}, m {}, l {}", n, m, l);
 
     heap.push(CodePath { path: Vec::new(), mus: Vec::new() , code: Vec::new() });
@@ -77,8 +96,8 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
     }
 }
 
-pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
-    let mut ys = decode_inner(obs, gs, p, r);
+pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
+    let mut ys = decode_inner(obs, gs, p);
     // drop the final M zeros
     for _ in 0..gs.m {
         ys.pop().unwrap(); // unwrwap shouldn't fail if pre_process is correct
@@ -87,7 +106,7 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
 }
 
 /// A path in the tree
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 struct CodePath {
     path: Vec<u8>,
     mus: Vec<f64>,
@@ -155,21 +174,7 @@ impl CodePath {
     }
 }
 
-fn deserialise(input: &str) -> Result<Vec<u8>, Error> {
-    use std::io::ErrorKind::InvalidData;
-    let mut res = Vec::new();
-    for s in input.chars() {
-        match s {
-            '0' => res.push(0),
-            '1' => res.push(1),
-            ' ' | ',' => (),
-            _   => return Err(Error::new(InvalidData, "Must be '0' or '1'")),
-        }
-    }
-    Ok(res)
-}
-
-fn add_noise(xs: Vec<u8>, p: f64) -> Vec<u8> {
+pub fn add_noise(xs: Vec<u8>, p: f64) -> Vec<u8> {
     use std::u32;
     assert!(p > 0f64 && p < 1f64);
     let scaled_p = (p * u32::MAX as f64) as u32; // better to compute using Rational
@@ -214,8 +219,7 @@ fn test_decode() {
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
-    let r = 1f64/3f64;
-    assert_eq!(vec![1,1], decode(&obs, &gs, p, r));
+    assert_eq!(vec![1,1], decode(&obs, &gs, p));
 }
 
 #[test]
@@ -246,10 +250,10 @@ fn test_system() {
     let orig = vec![0,1,0,1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/10f64;
-    let r = 1f64/gs.gs.len() as f64;
+    // let r = 1f64/gs.n as f64;
 
     let ys = add_noise(encode(&orig, &gs), p);
     println!("ys {:?}", ys);
-    let xs = decode(&ys, &gs, p, r);
+    let xs = decode(&ys, &gs, p);
     assert_eq!(orig, xs);
 }
