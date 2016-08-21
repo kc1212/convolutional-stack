@@ -9,10 +9,27 @@ use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
 
-fn encode_inner(xs: &Vec<u8>, gs: &Vec<Vec<u8>>) -> Vec<u8> {
+pub struct Gens {
+    gs: Vec<Vec<u8>>,
+    m: usize,
+    n: usize,
+}
+
+impl Gens {
+    fn new(gs: Vec<Vec<u8>>) -> Gens {
+        Gens {
+            m: gs[0].len() - 1,
+            n: gs.len(),
+            gs: gs,
+        }
+    }
+}
+
+
+fn encode_inner(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
     let mut c: Vec<u8> = Vec::new();
     for (i, _) in xs.iter().enumerate() {
-        for g in gs {
+        for g in &gs.gs {
             let mut sum = 0;
             for (j, coeff) in g.iter().enumerate() {
                 sum ^= coeff * getx(&xs, i, j);
@@ -23,11 +40,10 @@ fn encode_inner(xs: &Vec<u8>, gs: &Vec<Vec<u8>>) -> Vec<u8> {
     c
 }
 
-pub fn encode(xs: &Vec<u8>, gs: &Vec<Vec<u8>>) -> Vec<u8> {
+pub fn encode(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
     // make a copy and add M number of zeros
     let mut xs = xs.clone();
-    let m = gs.len() - 1;
-    for _ in 0..m {
+    for _ in 0..gs.m {
         xs.push(0);
     }
     encode_inner(&xs, gs)
@@ -41,17 +57,15 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-fn decode_inner(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
+fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
     let mut heap = BinaryHeap::new();
-    let n = gs.len();
-    let m = gs[0].len() - 1;
-    let l = obs.len() / n - m;
-    println!("n {}, m {}, l {}", n, m, l);
+    let l = obs.len() / gs.n - gs.m;
+    // println!("n {}, m {}, l {}", n, m, l);
 
     heap.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
     loop {
         let last = heap.pop().unwrap();
-        if last.path.len() >= m + l {
+        if last.path.len() >= gs.m + l {
             println!("path {:?}, mu {:?}", last.path, last.mu);
             return last.path;
         }
@@ -64,11 +78,10 @@ fn decode_inner(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
     }
 }
 
-pub fn decode(obs: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> Vec<u8> {
+pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
     let mut ys = decode_inner(obs, gs, p, r);
     // drop the final M zeros
-    let m = gs.len() - 1;
-    for _ in 0..m {
+    for _ in 0..gs.m {
         ys.pop().unwrap(); // unwrwap shouldn't fail if pre_process is correct
     }
     ys
@@ -120,7 +133,7 @@ impl CodePath {
         v
     }
 
-    fn fano(&mut self, ys: &Vec<u8>, gs: &Vec<Vec<u8>>, p: f64, r: f64) -> f64 {
+    fn fano(&mut self, ys: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> f64 {
         let xs = encode_inner(&self.path, gs);
         let py = 0.5f64;
         // let n = xs.len() as f64;
@@ -175,16 +188,16 @@ fn f64_eq(a: f64, b: f64, eps: f64) -> bool {
 #[test]
 fn test_encode1() {
     let xs = vec![1, 0, 1, 1];
-    let gs1 = vec![vec![1, 1, 1], vec![1, 0, 1]];
+    let gs1 = Gens::new(vec![vec![1, 1, 1], vec![1, 0, 1]]);
     assert_eq!(encode_inner(&xs, &gs1), vec![1, 1, 1, 0, 0, 0, 0, 1]);
 
-    let gs2 = vec![vec![1, 1, 1], vec![1, 1, 0]];
+    let gs2 = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0]]);
     assert_eq!(encode_inner(&xs, &gs2), vec![1, 1, 1, 1, 0, 1, 0, 0]);
 }
 
 #[test]
 fn test_encode2() {
-    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let xs1 = vec![1, 1, 1, 0];
     assert_eq!(encode(&xs1, &gs), vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0]);
 
@@ -195,7 +208,7 @@ fn test_encode2() {
 #[test]
 fn test_decode() {
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
-    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
     let r = 1f64/3f64;
     assert_eq!(vec![1,1], decode(&obs, &gs, p, r));
@@ -216,7 +229,7 @@ fn test_noise() {
 #[test]
 fn test_fano() {
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
-    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
     let r = 1f64/3f64;
     let mut path = CodePath { path: vec![0, 0, 0, 0], mu: 0f64 };
@@ -227,9 +240,9 @@ fn test_fano() {
 fn test_system() {
     // TODO randomise these
     let orig = vec![0,1,0,1];
-    let gs = vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]];
+    let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/10f64;
-    let r = 1f64/gs.len() as f64;
+    let r = 1f64/gs.gs.len() as f64;
 
     let ys = add_noise(encode(&orig, &gs), p);
     println!("ys {:?}", ys);
