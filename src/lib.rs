@@ -4,7 +4,6 @@
 extern crate rand;
 
 use std::io::Error;
-use std::f64;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
@@ -62,11 +61,11 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
     let l = obs.len() / gs.n - gs.m;
     // println!("n {}, m {}, l {}", n, m, l);
 
-    heap.push(CodePath { path: Vec::new(), mu: f64::NEG_INFINITY });
+    heap.push(CodePath { path: Vec::new(), mus: Vec::new() , code: Vec::new() });
     loop {
         let last = heap.pop().unwrap();
         if last.path.len() >= gs.m + l {
-            println!("path {:?}, mu {:?}", last.path, last.mu);
+            // println!("path {:?}, mu {:?}", last.path, last.mu);
             return last.path;
         }
         let paths = last.extend(l);
@@ -74,7 +73,7 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
             path.fano(obs, gs, p, r);
             heap.push(path);
         }
-        println!("stack {:?}", heap);
+        // println!("stack {:?}", heap);
     }
 }
 
@@ -91,12 +90,13 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> Vec<u8> {
 #[derive(Clone, Debug)]
 struct CodePath {
     path: Vec<u8>,
-    mu: f64,
+    mus: Vec<f64>,
+    code: Vec<u8>,
 }
 
 impl PartialEq for CodePath {
     fn eq(&self, other: &CodePath) -> bool {
-        f64_eq(self.mu, other.mu, 1e-6)
+        f64_eq(self.mu(), other.mu(), &1e-6)
     }
 }
 
@@ -104,18 +104,22 @@ impl Eq for CodePath {}
 
 impl PartialOrd for CodePath {
     fn partial_cmp(&self, other: &CodePath) -> Option<Ordering> {
-        self.mu.partial_cmp(&other.mu)
+        self.mu().partial_cmp(&other.mu())
     }
 }
 
 // Implementation for Ord is required BinaryHeap
 impl Ord for CodePath {
     fn cmp(&self, other: &CodePath) -> Ordering {
-        self.mu.partial_cmp(&other.mu).unwrap()
+        self.mu().partial_cmp(&other.mu()).unwrap()
     }
 }
 
 impl CodePath {
+    fn mu(&self) -> &f64 {
+        self.mus.last().unwrap()
+    }
+
     /// Consumes myself and create new branches
     fn extend(mut self, l: usize) -> Vec<CodePath> {
         let mut v = Vec::new();
@@ -134,20 +138,20 @@ impl CodePath {
     }
 
     fn fano(&mut self, ys: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> f64 {
-        let xs = encode_inner(&self.path, gs);
+        self.code = encode_inner(&self.path, gs);
         let py = 0.5f64;
         // let n = xs.len() as f64;
         let mut res = 0f64;
         // println!("xs: {:?}, res: {}", xs, res);
-        for (x, y) in xs.iter().zip(ys.iter()) {
+        for (x, y) in self.code.iter().zip(ys.iter()) {
             if x == y {
                 res += ((1f64 - p) / py).log2();
             } else {
                 res += (p / py).log2();
             }
         }
-        self.mu = res - (xs.len() as f64) * r;
-        self.mu
+        self.mus.push(res - (self.code.len() as f64) * r);
+        *self.mu()
     }
 }
 
@@ -177,9 +181,9 @@ fn add_noise(xs: Vec<u8>, p: f64) -> Vec<u8> {
     }).collect()
 }
 
-fn f64_eq(a: f64, b: f64, eps: f64) -> bool {
+fn f64_eq(a: &f64, b: &f64, eps: &f64) -> bool {
     let abs_difference = (a - b).abs();
-    if abs_difference < eps {
+    if abs_difference < *eps {
         return true;
     }
     false
@@ -223,7 +227,7 @@ fn test_noise() {
         .filter(|&x| x == 1 )
         .collect::<Vec<u8>>()
         .len();
-    assert!(f64_eq(p, len as f64 / cnt as f64, 1e-3))
+    assert!(f64_eq(&p, &(len as f64 / cnt as f64), &1e-3))
 }
 
 #[test]
@@ -232,8 +236,8 @@ fn test_fano() {
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
     let r = 1f64/3f64;
-    let mut path = CodePath { path: vec![0, 0, 0, 0], mu: 0f64 };
-    assert!(f64_eq(-16.55865642634889, path.fano(&obs, &gs, p, r), 1e-6));
+    let mut path = CodePath { path: vec![0, 0, 0, 0], mus: vec![0f64], code: vec![] };
+    assert!(f64_eq(&-16.55865642634889, &path.fano(&obs, &gs, p, r), &1e-6));
 }
 
 #[test]
