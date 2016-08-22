@@ -8,6 +8,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate rand;
 
+use std::io::{Error, ErrorKind};
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
@@ -17,6 +18,44 @@ pub struct Input {
     pub xs: Vec<u8>,
     pub gs: Vec<Vec<u8>>,
     pub p: f64,
+}
+
+impl Input {
+    pub fn validate(&mut self) -> Result<(), Error> {
+        // check input
+        if self.xs.len() <= 0 {
+            return Err(Error::new(ErrorKind::InvalidInput, "No input"));
+        }
+
+        // check generator and align
+        if self.gs.len() <= 0 {
+            return Err(Error::new(ErrorKind::InvalidInput, "No generators"));
+        }
+
+        let mut max_len = 0;
+        for g in &self.gs {
+            if g.len() > max_len {
+                max_len = g.len();
+            }
+        }
+
+        if max_len <= 0 {
+            return Err(Error::new(ErrorKind::InvalidInput, "At least one of the generator is empty"));
+        }
+
+        for mut g in &mut self.gs {
+            for _ in 0..max_len - g.len() {
+                g.push(0);
+            }
+        }
+
+        // check probability
+        if self.p > 1f64 || self.p < 0f64 {
+            return Err(Error::new(ErrorKind::InvalidInput, "Probability is invalid"));
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Serialize)]
@@ -33,7 +72,6 @@ pub struct Gens {
 
 impl Gens {
     pub fn new(gs: Vec<Vec<u8>>) -> Gens {
-        // TODO make sure the generators are of the same length
         Gens {
             m: gs[0].len() - 1,
             n: gs.len(),
@@ -49,6 +87,7 @@ fn encode_inner(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
         for g in &gs.gs {
             let mut sum = 0;
             for (j, coeff) in g.iter().enumerate() {
+                assert!(coeff == &0 || coeff == &1);
                 sum ^= coeff * getx(&xs, i, j);
             }
             c.push(sum);
@@ -157,6 +196,7 @@ impl CodePath {
     }
 
     fn fano(&mut self, ys: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> f64 {
+        assert!(p > 0f64 && p < 1f64);
         self.code = encode_inner(&self.path, gs);
         let py = 0.5f64;
         // let n = xs.len() as f64;

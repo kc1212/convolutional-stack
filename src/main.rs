@@ -12,7 +12,8 @@ fn err_and_exit(e: json::error::Error) {
 
 fn main() {
     // TODO make it safer
-    let inp: cc::Input = json::de::from_reader(io::stdin()).unwrap();
+    let mut inp: cc::Input = json::de::from_reader(io::stdin()).unwrap();
+    inp.validate().unwrap();
     let gs = cc::Gens::new(inp.gs);
     let ys = cc::encode(&inp.xs, &gs);
     let noisy_ys = cc::add_noise(ys, inp.p);
