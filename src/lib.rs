@@ -14,8 +14,8 @@ use rand::random;
 
 #[derive(Deserialize)]
 pub struct Input {
-    pub gs: Vec<Vec<u8>>,
     pub xs: Vec<u8>,
+    pub gs: Vec<Vec<u8>>,
     pub p: f64,
 }
 
