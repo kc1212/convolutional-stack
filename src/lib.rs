@@ -60,7 +60,9 @@ impl Input {
 
 #[derive(Serialize)]
 pub struct Output {
-    pub code: Vec<u8>,
+    pub encoded: Vec<u8>,
+    pub observed: Vec<u8>,
+    pub decoded: Vec<u8>,
     // paths: Vec<CodePath>,
 }
 
@@ -80,18 +82,26 @@ impl Gens {
     }
 }
 
-
+// does not add M zeros
 fn encode_inner(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
-    let mut c: Vec<u8> = Vec::new();
+    let mut c: Vec<u8> = Vec::new(); // TODO with_capacity
     for (i, _) in xs.iter().enumerate() {
-        for g in &gs.gs {
-            let mut sum = 0;
-            for (j, coeff) in g.iter().enumerate() {
-                assert!(coeff == &0 || coeff == &1);
-                sum ^= coeff * getx(&xs, i, j);
-            }
-            c.push(sum);
+        c.extend_from_slice(&encode_step(xs, gs, i))
+    }
+    c
+}
+
+// not the most efficient way encoding since the returned value must be drained
+// but we need this function to perform decoding
+fn encode_step(xs: &Vec<u8>, gs: &Gens, i: usize) -> Vec<u8> {
+    let mut c: Vec<u8> = Vec::with_capacity(gs.n);
+    for g in &gs.gs {
+        let mut sum = 0;
+        for (j, coeff) in g.iter().enumerate() {
+            assert!(coeff == &0 || coeff == &1);
+            sum ^= coeff * getx(&xs, i, j);
         }
+        c.push(sum);
     }
     c
 }
@@ -113,10 +123,9 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
+fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> CodePath {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
-    let r = 1f64 / gs.n as f64;
     // println!("n {}, m {}, l {}", n, m, l);
 
     heap.push(CodePath { path: Vec::new(), mus: Vec::new() , code: Vec::new() });
@@ -124,11 +133,11 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
         let last = heap.pop().unwrap();
         if last.path.len() >= gs.m + l {
             // println!("path {:?}, mu {:?}", last.path, last.mu);
-            return last.path;
+            return last;
         }
-        let paths = last.extend(l);
-        for mut path in paths {
-            path.fano(obs, gs, p, r);
+
+        let paths = last.extend(l, obs, gs, p);
+        for path in paths {
             heap.push(path);
         }
         // println!("stack {:?}", heap);
@@ -136,7 +145,7 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
 }
 
 pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
-    let mut ys = decode_inner(obs, gs, p);
+    let mut ys = decode_inner(obs, gs, p).path;
     // drop the final M zeros
     for _ in 0..gs.m {
         ys.pop().unwrap(); // unwrwap shouldn't fail if pre_process is correct
@@ -149,12 +158,12 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
 struct CodePath {
     path: Vec<u8>,
     mus: Vec<f64>,
-    code: Vec<u8>,
+    code: Vec<Vec<u8>>,
 }
 
 impl PartialEq for CodePath {
     fn eq(&self, other: &CodePath) -> bool {
-        f64_eq(self.mu(), other.mu(), &1e-6)
+        f64_eq(&self.mu(), &other.mu(), &1e-6)
     }
 }
 
@@ -166,7 +175,7 @@ impl PartialOrd for CodePath {
     }
 }
 
-// Implementation for Ord is required BinaryHeap
+/// Implementation for Ord is required BinaryHeap
 impl Ord for CodePath {
     fn cmp(&self, other: &CodePath) -> Ordering {
         self.mu().partial_cmp(&other.mu()).unwrap()
@@ -174,55 +183,77 @@ impl Ord for CodePath {
 }
 
 impl CodePath {
-    fn mu(&self) -> &f64 {
-        self.mus.last().unwrap()
+    fn mu(&self) -> f64 {
+        if self.mus.is_empty() {
+            0f64
+        } else {
+            *self.mus.last().unwrap()
+        }
     }
 
-    /// Consumes myself and create new branches
-    fn extend(mut self, l: usize) -> Vec<CodePath> {
+    /// Consumes myself and create new branches,
+    /// this function depends on previously computed paths and fano metric.
+    fn extend(mut self, l: usize, ys: &Vec<u8>, gs: &Gens, p: f64) -> Vec<CodePath> {
         let mut v = Vec::new();
         if self.path.len() < l {
             let mut p1 = self;
             let mut p2 = p1.clone();
-            p1.path.push(0);
-            p2.path.push(1);
+            p1.fano(0, ys, gs, p);
+            p2.fano(1, ys, gs, p);
             v.push(p1);
             v.push(p2);
         } else {
-            self.path.push(0);
+            self.fano(0, ys, gs, p);
             v.push(self);
         }
         v
     }
 
-    fn fano(&mut self, ys: &Vec<u8>, gs: &Gens, p: f64, r: f64) -> f64 {
+    /// Update the path and the fano metric,
+    /// this function depends on previously computed paths and fano metric.
+    fn fano(&mut self, x: u8, ys: &Vec<u8>, gs: &Gens, p: f64) -> f64 {
         assert!(p > 0f64 && p < 1f64);
-        self.code = encode_inner(&self.path, gs);
+        assert!(x == 0 || x == 1);
+        assert_eq!(self.path.len(), self.code.len());
+
+        self.path.push(x);
         let py = 0.5f64;
-        // let n = xs.len() as f64;
-        let mut res = 0f64;
-        // println!("xs: {:?}, res: {}", xs, res);
-        for (x, y) in self.code.iter().zip(ys.iter()) {
+        let r = 1f64 / gs.n as f64;
+        let _idx = self.path.len() - 1;
+        let _xs = encode_step(&self.path, gs, _idx);
+        let _ys = &ys[_idx*gs.n .. (_idx+1)*gs.n];
+        println!("path - {:?}, xs - {:?}, ys - {:?}", self.path, _xs, _ys);
+
+        // mu is the fano metric for one iteration
+        let mut mu = 0f64;
+        for (x, y) in _xs.iter().zip(_ys.iter()) {
             if x == y {
-                res += ((1f64 - p) / py).log2();
+                mu += ((1f64 - p) / py).log2() - r;
             } else {
-                res += (p / py).log2();
+                mu += (p / py).log2() - r;
             }
         }
-        self.mus.push(res - (self.code.len() as f64) * r);
-        *self.mu()
+
+        // update mu to be the fano metric for the whole path
+        mu = self.mu() + mu;
+        self.mus.push(mu);
+
+        // update code
+        self.code.push(_xs);
+        mu
     }
 }
 
-pub fn add_noise(xs: Vec<u8>, p: f64) -> Vec<u8> {
+pub fn create_noise(xs: &[u8], p: f64) -> Vec<u8> {
     use std::u32;
     assert!(p > 0f64 && p < 1f64);
     let scaled_p = (p * u32::MAX as f64) as u32; // better to compute using Rational
-    xs.into_iter().map(|mut y| {
+    xs.clone().into_iter().map(|&y| {
         if random::<u32>() < scaled_p {
-            y = 1 - y;
+            1 - y
+        } else {
+            y
         }
-        y
     }).collect()
 }
 
@@ -264,25 +295,26 @@ fn test_decode() {
 
 #[test]
 fn test_noise() {
-    let cnt = 1000000;
+    const CNT: usize = 1000000;
     let p = 0.1;
-    let len = add_noise(vec![0; cnt], 0.1)
+    let len = create_noise(&[0; CNT], 0.1)
         .into_iter()
         .filter(|&x| x == 1 )
         .collect::<Vec<u8>>()
         .len();
-    assert!(f64_eq(&p, &(len as f64 / cnt as f64), &1e-3))
+    assert!(f64_eq(&p, &(len as f64 / CNT as f64), &1e-3))
 }
 
+/*
 #[test]
 fn test_fano() {
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
-    let r = 1f64/3f64;
     let mut path = CodePath { path: vec![0, 0, 0, 0], mus: vec![0f64], code: vec![] };
-    assert!(f64_eq(&-16.55865642634889, &path.fano(&obs, &gs, p, r), &1e-6));
+    assert!(f64_eq(&-16.55865642634889, &path.fano(&obs, &gs, p), &1e-6));
 }
+*/
 
 #[test]
 fn test_system() {
@@ -292,7 +324,7 @@ fn test_system() {
     let p = 1f64/10f64;
     // let r = 1f64/gs.n as f64;
 
-    let ys = add_noise(encode(&orig, &gs), p);
+    let ys = create_noise(&encode(&orig, &gs), p);
     println!("ys {:?}", ys);
     let xs = decode(&ys, &gs, p);
     assert_eq!(orig, xs);
