@@ -62,8 +62,8 @@ impl Input {
 pub struct Output {
     pub encoded: Vec<u8>,
     pub observed: Vec<u8>,
-    pub decoded: Vec<u8>,
-    // paths: Vec<CodePath>,
+    pub code_path: CodePath,
+    pub code_path_rest: Vec<CodePath>,
 }
 
 pub struct Gens {
@@ -82,15 +82,6 @@ impl Gens {
     }
 }
 
-// does not add M zeros
-fn encode_inner(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
-    let mut c: Vec<u8> = Vec::new(); // TODO with_capacity
-    for (i, _) in xs.iter().enumerate() {
-        c.extend_from_slice(&encode_step(xs, gs, i))
-    }
-    c
-}
-
 // not the most efficient way encoding since the returned value must be drained
 // but we need this function to perform decoding
 fn encode_step(xs: &Vec<u8>, gs: &Gens, i: usize) -> Vec<u8> {
@@ -106,13 +97,23 @@ fn encode_step(xs: &Vec<u8>, gs: &Gens, i: usize) -> Vec<u8> {
     c
 }
 
+/// Same as `encode`, but without pre-processing
+pub fn encode_(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
+    let mut c: Vec<u8> = Vec::new(); // TODO with_capacity
+    for (i, _) in xs.iter().enumerate() {
+        c.extend_from_slice(&encode_step(xs, gs, i))
+    }
+    c
+}
+
+/// Perform convolutional encoding
 pub fn encode(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
     // make a copy and add M number of zeros
     let mut xs = xs.clone();
     for _ in 0..gs.m {
         xs.push(0);
     }
-    encode_inner(&xs, gs)
+    encode_(&xs, gs)
 }
 
 /// Returns xs[i - j] when possible otherwise 0
@@ -123,20 +124,21 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> CodePath {
+/// Same as `decode` but without post-processing,
+/// returns a tuple of the choosen code path and the other code paths
+pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (CodePath, Vec<CodePath>) {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
     // println!("n {}, m {}, l {}", n, m, l);
 
     heap.push(CodePath { path: Vec::new(), mus: Vec::new() , code: Vec::new() });
     loop {
-        let last = heap.pop().unwrap();
-        if last.path.len() >= gs.m + l {
-            // println!("path {:?}, mu {:?}", last.path, last.mu);
-            return last;
+        let best = heap.pop().unwrap();
+        if best.path.len() >= gs.m + l {
+            return (best, heap.into_sorted_vec());
         }
 
-        let paths = last.extend(l, obs, gs, p);
+        let paths = best.extend(l, obs, gs, p);
         for path in paths {
             heap.push(path);
         }
@@ -144,21 +146,22 @@ fn decode_inner(obs: &Vec<u8>, gs: &Gens, p: f64) -> CodePath {
     }
 }
 
+/// Perform decoding using the stack algorithm
 pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
-    let mut ys = decode_inner(obs, gs, p).path;
+    let mut ys = decode_(obs, gs, p).0.path;
     // drop the final M zeros
     for _ in 0..gs.m {
-        ys.pop().unwrap(); // unwrwap shouldn't fail if pre_process is correct
+        ys.pop().unwrap(); // unwrwap shouldn't fail if `encode` is used
     }
     ys
 }
 
 /// A path in the tree
 #[derive(Clone, Debug, Serialize)]
-struct CodePath {
-    path: Vec<u8>,
-    mus: Vec<f64>,
-    code: Vec<Vec<u8>>,
+pub struct CodePath {
+    pub path: Vec<u8>,
+    pub mus: Vec<f64>,
+    pub code: Vec<Vec<u8>>,
 }
 
 impl PartialEq for CodePath {
@@ -222,7 +225,7 @@ impl CodePath {
         let _idx = self.path.len() - 1;
         let _xs = encode_step(&self.path, gs, _idx);
         let _ys = &ys[_idx*gs.n .. (_idx+1)*gs.n];
-        println!("path - {:?}, xs - {:?}, ys - {:?}", self.path, _xs, _ys);
+        // println!("path - {:?}, xs - {:?}, ys - {:?}", self.path, _xs, _ys);
 
         // mu is the fano metric for one iteration
         let mut mu = 0f64;
@@ -269,10 +272,10 @@ fn f64_eq(a: &f64, b: &f64, eps: &f64) -> bool {
 fn test_encode1() {
     let xs = vec![1, 0, 1, 1];
     let gs1 = Gens::new(vec![vec![1, 1, 1], vec![1, 0, 1]]);
-    assert_eq!(encode_inner(&xs, &gs1), vec![1, 1, 1, 0, 0, 0, 0, 1]);
+    assert_eq!(encode_(&xs, &gs1), vec![1, 1, 1, 0, 0, 0, 0, 1]);
 
     let gs2 = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0]]);
-    assert_eq!(encode_inner(&xs, &gs2), vec![1, 1, 1, 1, 0, 1, 0, 0]);
+    assert_eq!(encode_(&xs, &gs2), vec![1, 1, 1, 1, 0, 1, 0, 0]);
 }
 
 #[test]
@@ -286,11 +289,18 @@ fn test_encode2() {
 }
 
 #[test]
-fn test_decode() {
+fn test_decode_and_fano() {
     let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/16f64;
     assert_eq!(vec![1,1], decode(&obs, &gs, p));
+
+    // using the same params we can test the fano metric too
+    let (best, rest) = decode_(&obs, &gs, p);
+    let worst = rest.first().unwrap();
+    assert!(f64_eq(&-0.9310940439148156, &best.mu(), &1e-6));
+    println!("{}", &worst.mu());
+    assert!(f64_eq(&-16.093109404391484, &worst.mu(), &1e-6));
 }
 
 #[test]
@@ -305,27 +315,15 @@ fn test_noise() {
     assert!(f64_eq(&p, &(len as f64 / CNT as f64), &1e-3))
 }
 
-/*
-#[test]
-fn test_fano() {
-    let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
-    let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
-    let p = 1f64/16f64;
-    let mut path = CodePath { path: vec![0, 0, 0, 0], mus: vec![0f64], code: vec![] };
-    assert!(f64_eq(&-16.55865642634889, &path.fano(&obs, &gs, p), &1e-6));
-}
-*/
-
 #[test]
 fn test_system() {
     // TODO randomise these
     let orig = vec![0,1,0,1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let p = 1f64/10f64;
-    // let r = 1f64/gs.n as f64;
 
     let ys = create_noise(&encode(&orig, &gs), p);
-    println!("ys {:?}", ys);
+    // println!("ys {:?}", ys);
     let xs = decode(&ys, &gs, p);
     assert_eq!(orig, xs);
 }

@@ -19,7 +19,10 @@ fn main() {
     let gs = cc::Gens::new(inp.gs);
     let ys = cc::encode(&inp.xs, &gs);
     let noisy_ys = cc::create_noise(&ys, inp.p);
-    let result = cc::decode(&noisy_ys, &gs, inp.p);
-    let output = cc::Output{ encoded: ys, observed: noisy_ys, decoded: result };
+    let (path, rest) = cc::decode_(&noisy_ys, &gs, inp.p);
+    let output = cc::Output{ encoded: ys,
+                             observed: noisy_ys,
+                             code_path: path,
+                             code_path_rest: rest };
     json::ser::to_writer(&mut io::stdout(), &output).unwrap();
 }
