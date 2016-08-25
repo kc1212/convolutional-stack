@@ -58,12 +58,14 @@ impl Input {
     }
 }
 
+/// For tracking the decoding progress and some key data
 #[derive(Serialize)]
-pub struct Output {
+pub struct Progress {
     pub encoded: Vec<u8>,
     pub observed: Vec<u8>,
-    pub code_path: CodePath,
-    pub code_path_rest: Vec<CodePath>,
+    pub decoded: Vec<u8>,
+    /// The paths in the order which they are evaluated by the algorithm
+    pub paths: Vec<CodePath>,
 }
 
 pub struct Gens {
@@ -124,25 +126,25 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-/// Same as `decode` but without post-processing,
-/// returns a tuple of the choosen code path and the other code paths
+// TODO provide an option to disable logging
+/// Same as `decode` but without post-processing, and returns a CodePath
 pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (CodePath, Vec<CodePath>) {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
-    // println!("n {}, m {}, l {}", n, m, l);
+    let mut progress = Vec::new();
 
-    heap.push(CodePath { path: Vec::new(), mus: Vec::new() , code: Vec::new() });
+    heap.push(CodePath { path: Vec::new(), mu: 0f64 });
     loop {
         let best = heap.pop().unwrap();
         if best.path.len() >= gs.m + l {
-            return (best, heap.into_sorted_vec());
+            return (best, progress);
         }
 
         let paths = best.extend(l, obs, gs, p);
         for path in paths {
+            progress.push(path.clone());
             heap.push(path);
         }
-        // println!("stack {:?}", heap);
     }
 }
 
@@ -160,13 +162,12 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
 #[derive(Clone, Debug, Serialize)]
 pub struct CodePath {
     pub path: Vec<u8>,
-    pub mus: Vec<f64>,
-    pub code: Vec<Vec<u8>>,
+    pub mu: f64,
 }
 
 impl PartialEq for CodePath {
     fn eq(&self, other: &CodePath) -> bool {
-        f64_eq(&self.mu(), &other.mu(), &1e-6)
+        f64_eq(&self.mu, &other.mu, &1e-6)
     }
 }
 
@@ -174,26 +175,18 @@ impl Eq for CodePath {}
 
 impl PartialOrd for CodePath {
     fn partial_cmp(&self, other: &CodePath) -> Option<Ordering> {
-        self.mu().partial_cmp(&other.mu())
+        self.mu.partial_cmp(&other.mu)
     }
 }
 
 /// Implementation for Ord is required BinaryHeap
 impl Ord for CodePath {
     fn cmp(&self, other: &CodePath) -> Ordering {
-        self.mu().partial_cmp(&other.mu()).unwrap()
+        self.mu.partial_cmp(&other.mu).unwrap()
     }
 }
 
 impl CodePath {
-    fn mu(&self) -> f64 {
-        if self.mus.is_empty() {
-            0f64
-        } else {
-            *self.mus.last().unwrap()
-        }
-    }
-
     /// Consumes myself and create new branches,
     /// this function depends on previously computed paths and fano metric.
     fn extend(mut self, l: usize, ys: &Vec<u8>, gs: &Gens, p: f64) -> Vec<CodePath> {
@@ -217,7 +210,6 @@ impl CodePath {
     fn fano(&mut self, x: u8, ys: &Vec<u8>, gs: &Gens, p: f64) -> f64 {
         assert!(p > 0f64 && p < 1f64);
         assert!(x == 0 || x == 1);
-        assert_eq!(self.path.len(), self.code.len());
 
         self.path.push(x);
         let py = 0.5f64;
@@ -225,7 +217,6 @@ impl CodePath {
         let _idx = self.path.len() - 1;
         let _xs = encode_step(&self.path, gs, _idx);
         let _ys = &ys[_idx*gs.n .. (_idx+1)*gs.n];
-        // println!("path - {:?}, xs - {:?}, ys - {:?}", self.path, _xs, _ys);
 
         // mu is the fano metric for one iteration
         let mut mu = 0f64;
@@ -238,12 +229,11 @@ impl CodePath {
         }
 
         // update mu to be the fano metric for the whole path
-        mu = self.mu() + mu;
-        self.mus.push(mu);
+        self.mu = self.mu + mu;
+        mu
 
         // update code
-        self.code.push(_xs);
-        mu
+        // self.code = _xs;
     }
 }
 
@@ -296,11 +286,11 @@ fn test_decode_and_fano() {
     assert_eq!(vec![1,1], decode(&obs, &gs, p));
 
     // using the same params we can test the fano metric too
-    let (best, rest) = decode_(&obs, &gs, p);
-    let worst = rest.first().unwrap();
-    assert!(f64_eq(&-0.9310940439148156, &best.mu(), &1e-6));
-    println!("{}", &worst.mu());
-    assert!(f64_eq(&-16.093109404391484, &worst.mu(), &1e-6));
+    let best = decode_(&obs, &gs, p).0;
+    // let worst = rest.first().unwrap();
+    assert!(f64_eq(&-0.9310940439148156, &best.mu, &1e-6));
+    // println!("{}", &worst.mu());
+    // assert!(f64_eq(&-16.093109404391484, &worst.mu(), &1e-6));
 }
 
 #[test]

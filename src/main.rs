@@ -1,7 +1,7 @@
 extern crate convolutional_code;
 extern crate serde_json;
 
-use std::io::{self, Write};
+use std::io::{self};
 use serde_json as json;
 use convolutional_code as cc;
 
@@ -19,10 +19,10 @@ fn main() {
     let gs = cc::Gens::new(inp.gs);
     let ys = cc::encode(&inp.xs, &gs);
     let noisy_ys = cc::create_noise(&ys, inp.p);
-    let (path, rest) = cc::decode_(&noisy_ys, &gs, inp.p);
-    let output = cc::Output{ encoded: ys,
+    let (path, paths) = cc::decode_(&noisy_ys, &gs, inp.p);
+    let output = cc::Progress{ encoded: ys,
                              observed: noisy_ys,
-                             code_path: path,
-                             code_path_rest: rest };
+                             decoded: path.path,
+                             paths: paths };
     json::ser::to_writer(&mut io::stdout(), &output).unwrap();
 }
