@@ -34,6 +34,7 @@ class Dialog(Gtk.Dialog):
                         + str(results["decoded"]) + "\n")
         lbl.set_line_wrap(True)
 
+        self.l = len(results["decoded"]) - results["m"]
         self.tree_data = results["paths"]
         self.darea = Gtk.DrawingArea()
         self.darea.connect("draw", self.draw)
@@ -56,9 +57,9 @@ class Dialog(Gtk.Dialog):
     def on_btn_forward(self, btn):
         pass
 
-    def draw_path(self, cr, h, path, mu):
+    def draw_path(self, cr, h, path, mu, lvl):
         if not path:
-            cr.show_text(str(mu))
+            cr.show_text("{:.2f}".format(mu))
             cr.set_line_width(1)
             cr.stroke()
             return
@@ -69,40 +70,20 @@ class Dialog(Gtk.Dialog):
         x, y = cr.get_current_point()
         h = h / 2
         cr.rectangle(x - 10, y - 10, 20, 20)
+        cr.move_to(x, y)
 
-        print(x,y,h, p,path)
-
-        if p == 0:
-            print("drawing 0")
-            cr.move_to(x, y)
+        # draw straight line if we're at the last m positions
+        if lvl > self.l:
+            cr.rel_line_to(100, 0)
+        elif p == 0:
             cr.rel_line_to(100, -h)
-            self.draw_path(cr, h, path, mu)
         elif p == 1:
-            print("drawing 1")
-            cr.move_to(x, y)
             cr.rel_line_to(100, h)
-            self.draw_path(cr, h, path, mu)
         else:
             assert False, "Must be 0 or 1"
 
-    # def draw_tree(self, cr, h, depth):
-    #     if depth is 0:
-    #         cr.set_line_width(1)
-    #         cr.stroke()
-    #         return
-
-    #     # start at the point where we want to start drawing
-    #     x, y = cr.get_current_point()
-    #     h = h / 2
-    #     cr.rectangle(x - 10, y - 10, 20, 20)
-
-    #     cr.move_to(x, y)
-    #     cr.rel_line_to(100, h)
-    #     self.draw_tree(cr, h, depth - 1)
-
-    #     cr.move_to(x, y)
-    #     cr.rel_line_to(100, -h)
-    #     self.draw_tree(cr, h, depth - 1)
+        # recursive step
+        self.draw_path(cr, h, path, mu, lvl+1)
 
     def draw(self, darea, cr):
         # red
@@ -114,7 +95,7 @@ class Dialog(Gtk.Dialog):
 
         for path in self.tree_data:
             cr.move_to(0, h/2)
-            self.draw_path(cr, h/2, list(path["path"]), path["mu"])
+            self.draw_path(cr, h/2, list(path["path"]), path["mu"], 1)
 
 
 class Window(Gtk.Window):

@@ -60,7 +60,9 @@ impl Input {
 
 /// For tracking the decoding progress and some key data
 #[derive(Serialize)]
-pub struct Progress {
+pub struct Results {
+    pub m: usize,
+    pub n: usize,
     pub encoded: Vec<u8>,
     pub observed: Vec<u8>,
     pub decoded: Vec<u8>,
@@ -70,8 +72,8 @@ pub struct Progress {
 
 pub struct Gens {
     gs: Vec<Vec<u8>>,
-    m: usize,
-    n: usize,
+    pub m: usize,
+    pub n: usize,
 }
 
 impl Gens {
