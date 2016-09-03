@@ -36,11 +36,16 @@ class Dialog(Gtk.Dialog):
 
         self.l = len(results["decoded"]) - results["m"]
         self.tree_data = results["paths"]
-        self.darea = Gtk.DrawingArea()
-        self.darea.connect("draw", self.draw)
-        self.darea.set_size_request(500, 500)
+        self.path_n = 0
+        self.drawing = Gtk.DrawingArea()
+        self.drawing.connect("draw", self.draw)
+        self.drawing.set_size_request(500, 500)
 
-        pack_start_all(vbox, [lbl, self.darea, hbox])
+        self.scrolled = Gtk.ScrolledWindow()
+        self.scrolled.add_with_viewport(self.drawing)
+        self.scrolled.set_min_content_height(500)
+        self.scrolled.set_min_content_width(500)
+        pack_start_all(vbox, [lbl, self.scrolled, hbox])
 
         self.btn_back = Gtk.Button(label="<<", halign=Gtk.Align.END)
         self.btn_forward = Gtk.Button(label=">>", halign=Gtk.Align.START)
@@ -49,13 +54,18 @@ class Dialog(Gtk.Dialog):
 
         pack_start_all(hbox, [self.btn_back, self.btn_forward]) # order matters
 
+        # self.set_default_size(800, 600)
         self.show_all()
 
     def on_btn_back(self, btn):
-        pass
+        if self.path_n > 0:
+            self.path_n -= 1
+        self.drawing.queue_draw()
 
     def on_btn_forward(self, btn):
-        pass
+        if self.path_n < len(self.tree_data):
+            self.path_n += 1
+        self.drawing.queue_draw()
 
     def draw_path(self, cr, h, path, mu, lvl):
         if not path:
@@ -85,15 +95,16 @@ class Dialog(Gtk.Dialog):
         # recursive step
         self.draw_path(cr, h, path, mu, lvl+1)
 
-    def draw(self, darea, cr):
+    def draw(self, drawing, cr):
         # red
         cr.set_source_rgba(0.5, 0.0, 0.0, 1.0)
 
         # get the width and height of the drawing area
-        w = self.darea.get_allocated_width()
-        h = self.darea.get_allocated_height()
+        w = self.drawing.get_allocated_width()
+        h = self.drawing.get_allocated_height()
 
-        for path in self.tree_data:
+        for i in range(self.path_n):
+            path = self.tree_data[i]
             cr.move_to(0, h/2)
             self.draw_path(cr, h/2, list(path["path"]), path["mu"], 1)
 

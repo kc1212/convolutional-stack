@@ -209,7 +209,7 @@ impl CodePath {
 
     /// Update the path and the fano metric,
     /// this function depends on previously computed paths and fano metric.
-    fn fano(&mut self, x: u8, ys: &Vec<u8>, gs: &Gens, p: f64) -> f64 {
+    fn fano(&mut self, x: u8, ys: &Vec<u8>, gs: &Gens, p: f64) {
         assert!(p > 0f64 && p < 1f64);
         assert!(x == 0 || x == 1);
 
@@ -232,10 +232,6 @@ impl CodePath {
 
         // update mu to be the fano metric for the whole path
         self.mu = self.mu + mu;
-        mu
-
-        // update code
-        // self.code = _xs;
     }
 }
 
