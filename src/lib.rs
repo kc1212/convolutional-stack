@@ -27,6 +27,12 @@ impl Input {
             return Err(Error::new(ErrorKind::InvalidInput, "No input"));
         }
 
+        for x in &self.xs {
+            if x != &0 && x != &1 {
+                return Err(Error::new(ErrorKind::InvalidInput, "Invalid input, must be 0 or 1"));
+            }
+        }
+
         // check generator and align
         if self.gs.len() <= 0 {
             return Err(Error::new(ErrorKind::InvalidInput, "No generators"));
@@ -37,12 +43,19 @@ impl Input {
             if g.len() > max_len {
                 max_len = g.len();
             }
+            for x in g {
+                if x != &0 && x != &1 {
+                    return Err(Error::new(ErrorKind::InvalidInput, "Invalid generator(s), must be 0 or 1"));
+                }
+            }
         }
 
         if max_len <= 0 {
             return Err(Error::new(ErrorKind::InvalidInput, "At least one of the generator is empty"));
         }
 
+        // pad short generators with zeros
+        // TODO consider moving this part to another function and make this function take &self?
         for mut g in &mut self.gs {
             for _ in 0..max_len - g.len() {
                 g.push(0);
@@ -120,7 +133,7 @@ pub fn encode(xs: &Vec<u8>, gs: &Gens) -> Vec<u8> {
     encode_(&xs, gs)
 }
 
-/// Returns xs[i - j] when possible otherwise 0
+/// Returns xs[i - j] when possible otherwise 0 representing the register
 fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     if j > i {
         return 0;

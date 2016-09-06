@@ -8,7 +8,8 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, cairo
 
 def parse_bin(s: str) -> List[int]:
-    return [1 if x == '1' else 0 for x in s]
+    # die if we can't parse
+    return [int(x) for x in s]
 
 def parse_gen(s: str) -> List[List[int]]:
     return [parse_bin(s) for s in s.split(',')]
@@ -138,7 +139,7 @@ class Window(Gtk.Window):
 
         # probability section
         self.lbl_p = Gtk.Label(label="Error probability p,\nwhere 0 < p < 1.", halign=Gtk.Align.START)
-        self.entry_p = Gtk.Entry(text="0.2")
+        self.entry_p = Gtk.Entry(text="0.1")
         self.sep_p = Gtk.Separator(valign=Gtk.Align.CENTER)
         pack_start_all(vbox, [self.lbl_p, self.entry_p, self.sep_p])
 
@@ -157,9 +158,17 @@ class Window(Gtk.Window):
                      "gs": self.entry_gs,
                      "p": self.entry_p}
         d = {k: v.get_buffer().get_text() for k, v in user_data.items()}
-        d["xs"] = parse_bin(d['xs'])
-        d["gs"] = parse_gen(d['gs'])
-        d["p"] = float(d['p'])
+        try:
+            d["xs"] = parse_bin(d['xs'])
+            d["gs"] = parse_gen(d['gs'])
+            d["p"] = float(d['p'])
+        except ValueError as e:
+            dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.ERROR,
+                                       Gtk.ButtonsType.CLOSE, e)
+            dialog.run()
+            dialog.destroy()
+            return
+
 
         p = subprocess.Popen(['./target/release/convolutional-code'],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

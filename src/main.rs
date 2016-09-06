@@ -13,13 +13,16 @@ fn err_and_exit(e: json::error::Error) {
 */
 
 fn main() {
-    // TODO make it safer
+    // TODO remove unwraps, make the code safer
     let mut inp: cc::Input = json::de::from_reader(io::stdin()).unwrap();
     inp.validate().unwrap();
+
     let gs = cc::Gens::new(inp.gs);
     let ys = cc::encode(&inp.xs, &gs);
+
     let noisy_ys = cc::create_noise(&ys, inp.p);
     let (path, paths) = cc::decode_(&noisy_ys, &gs, inp.p);
+
     let output = cc::Results {
         m: gs.m,
         n: gs.n,
