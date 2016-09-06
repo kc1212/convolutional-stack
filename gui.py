@@ -1,5 +1,6 @@
 from typing import List
 
+import math
 import json
 import subprocess
 import gi
@@ -16,6 +17,10 @@ def pack_start_all(box, widgets, expand = True, fill = True, padding = 0):
     for w in widgets:
         box.pack_start(w, expand, fill, padding)
 
+def max_len(ls, f = lambda x: x) -> int:
+    return max([len(f(l)) for l in ls])
+
+STEP_PX = 100
 class Dialog(Gtk.Dialog):
     def __init__(self, parent, results):
         print(results)
@@ -39,13 +44,13 @@ class Dialog(Gtk.Dialog):
         self.path_n = 0
         self.drawing = Gtk.DrawingArea()
         self.drawing.connect("draw", self.draw)
-        self.drawing.set_size_request(500, 500)
+        self.drawing.set_size_request(max_len(self.tree_data, lambda x: x["path"]) * STEP_PX + 50, 800)
 
-        self.scrolled = Gtk.ScrolledWindow()
-        self.scrolled.add_with_viewport(self.drawing)
-        self.scrolled.set_min_content_height(500)
-        self.scrolled.set_min_content_width(500)
-        pack_start_all(vbox, [lbl, self.scrolled, hbox])
+        # self.scrolled = Gtk.ScrolledWindow()
+        # self.scrolled.add_with_viewport(self.drawing)
+        # self.scrolled.set_min_content_height(500)
+        # self.scrolled.set_min_content_width(500)
+        pack_start_all(vbox, [lbl, self.drawing, hbox])
 
         self.btn_back = Gtk.Button(label="<<", halign=Gtk.Align.END)
         self.btn_forward = Gtk.Button(label=">>", halign=Gtk.Align.START)
@@ -54,7 +59,6 @@ class Dialog(Gtk.Dialog):
 
         pack_start_all(hbox, [self.btn_back, self.btn_forward]) # order matters
 
-        # self.set_default_size(800, 600)
         self.show_all()
 
     def on_btn_back(self, btn):
@@ -69,8 +73,10 @@ class Dialog(Gtk.Dialog):
 
     def draw_path(self, cr, h, path, mu, lvl):
         if not path:
+            cr.rel_move_to(0, -15) # no need to move back because we're return at the end
+            cr.set_font_size(20)
             cr.show_text("{:.2f}".format(mu))
-            cr.set_line_width(1)
+            cr.set_line_width(2)
             cr.stroke()
             return
 
@@ -79,16 +85,17 @@ class Dialog(Gtk.Dialog):
         # start at the point where we want to start drawing
         x, y = cr.get_current_point()
         h = h / 2
-        cr.rectangle(x - 10, y - 10, 20, 20)
+        cr.arc(x, y, 5., 0., 2 * math.pi)
+        cr.fill()
         cr.move_to(x, y)
 
         # draw straight line if we're at the last m positions
         if lvl > self.l:
-            cr.rel_line_to(100, 0)
+            cr.rel_line_to(STEP_PX, 0)
         elif p == 0:
-            cr.rel_line_to(100, -h)
+            cr.rel_line_to(STEP_PX, -h)
         elif p == 1:
-            cr.rel_line_to(100, h)
+            cr.rel_line_to(STEP_PX, h)
         else:
             assert False, "Must be 0 or 1"
 
@@ -96,8 +103,8 @@ class Dialog(Gtk.Dialog):
         self.draw_path(cr, h, path, mu, lvl+1)
 
     def draw(self, drawing, cr):
-        # red
-        cr.set_source_rgba(0.5, 0.0, 0.0, 1.0)
+        # blue
+        cr.set_source_rgba(0.0, 0.0, 0.5, 1.0)
 
         # get the width and height of the drawing area
         w = self.drawing.get_allocated_width()
@@ -119,7 +126,7 @@ class Window(Gtk.Window):
 
         # input section
         self.lbl_xs = Gtk.Label(label="Binary input,\nany characters other than '0' or '1' are ignored.", halign=Gtk.Align.START)
-        self.entry_xs = Gtk.Entry(text="01")
+        self.entry_xs = Gtk.Entry(text="0101")
         self.sep_xs = Gtk.Separator(valign=Gtk.Align.CENTER)
         pack_start_all(vbox, [self.lbl_xs, self.entry_xs, self.sep_xs])
 
@@ -131,7 +138,7 @@ class Window(Gtk.Window):
 
         # probability section
         self.lbl_p = Gtk.Label(label="Error probability p,\nwhere 0 < p < 1.", halign=Gtk.Align.START)
-        self.entry_p = Gtk.Entry(text="0.1")
+        self.entry_p = Gtk.Entry(text="0.2")
         self.sep_p = Gtk.Separator(valign=Gtk.Align.CENTER)
         pack_start_all(vbox, [self.lbl_p, self.entry_p, self.sep_p])
 
