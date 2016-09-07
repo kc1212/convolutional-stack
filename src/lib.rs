@@ -1,11 +1,6 @@
 #![crate_type = "lib"]
-#![crate_name = "convolutional_code"]
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![crate_name = "convolutional_stack"]
 
-
-extern crate serde;
-extern crate serde_json;
 extern crate rand;
 
 use std::io::{Error, ErrorKind};
@@ -13,7 +8,6 @@ use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
 
-#[derive(Deserialize)]
 pub struct Input {
     pub xs: Vec<u8>,
     pub gs: Vec<Vec<u8>>,
@@ -72,7 +66,6 @@ impl Input {
 }
 
 /// For tracking the decoding progress and some key data
-#[derive(Serialize)]
 pub struct Results {
     pub m: usize,
     pub n: usize,
@@ -174,7 +167,7 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
 }
 
 /// A path in the tree
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct CodePath {
     pub path: Vec<u8>,
     pub mu: f64,

@@ -170,7 +170,7 @@ class Window(Gtk.Window):
             return
 
 
-        p = subprocess.Popen(['./target/release/convolutional-code'],
+        p = subprocess.Popen(['./target/release/convolutional-stack'],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate(json.dumps(d).encode())
 
