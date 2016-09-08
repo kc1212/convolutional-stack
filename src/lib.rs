@@ -22,7 +22,7 @@ pub fn parse_bin(xs: &str) -> Result<Vec<u8>, Error> {
     Ok(res)
 }
 
-pub fn parse_gs(gs: &String) -> Result<Gens, Error> {
+pub fn parse_gs(gs: &str) -> Result<Gens, Error> {
     let mut res = Vec::new();
     for g in gs.split(',') {
         res.push(try!(parse_bin(g)));
@@ -88,7 +88,7 @@ impl Gens {
 
 /// For tracking the decoding progress and some key data
 #[derive(Debug)]
-pub struct Results {
+pub struct StackResults {
     pub m: usize,
     pub n: usize,
     pub encoded: Vec<u8>,
@@ -96,6 +96,19 @@ pub struct Results {
     pub decoded: Vec<u8>,
     /// The paths in the order which they are evaluated by the algorithm
     pub paths: Vec<CodePath>,
+}
+
+impl StackResults {
+    pub fn new() -> StackResults {
+        StackResults {
+            m: 0,
+            n: 0,
+            encoded: Vec::new(),
+            observed: Vec::new(),
+            decoded: Vec::new(),
+            paths: Vec::new(),
+        }
+    }
 }
 
 // not the most efficient way encoding since the returned value must be drained
