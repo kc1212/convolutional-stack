@@ -1,1 +1,1 @@
-# convolutional-code
+# convolutional-stack

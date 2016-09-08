@@ -8,72 +8,65 @@ use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::random;
 
-pub struct Input {
-    pub xs: Vec<u8>,
-    pub gs: Vec<Vec<u8>>,
-    pub p: f64,
-}
-
-impl Input {
-    pub fn validate(&mut self) -> Result<(), Error> {
-        // check input
-        if self.xs.len() <= 0 {
-            return Err(Error::new(ErrorKind::InvalidInput, "No input"));
+// parse and check the binary input
+pub fn parse_bin(xs: &str) -> Result<Vec<u8>, Error> {
+    let mut res = Vec::new();
+    for x in xs.chars() {
+        match x {
+            '0' => res.push(0),
+            '1' => res.push(1),
+            ' ' => (),
+            _   => return Err(Error::new(ErrorKind::InvalidInput, "Invalid input, must be 0 or 1"))
         }
-
-        for x in &self.xs {
-            if x != &0 && x != &1 {
-                return Err(Error::new(ErrorKind::InvalidInput, "Invalid input, must be 0 or 1"));
-            }
-        }
-
-        // check generator and align
-        if self.gs.len() <= 0 {
-            return Err(Error::new(ErrorKind::InvalidInput, "No generators"));
-        }
-
-        let mut max_len = 0;
-        for g in &self.gs {
-            if g.len() > max_len {
-                max_len = g.len();
-            }
-            for x in g {
-                if x != &0 && x != &1 {
-                    return Err(Error::new(ErrorKind::InvalidInput, "Invalid generator(s), must be 0 or 1"));
-                }
-            }
-        }
-
-        if max_len <= 0 {
-            return Err(Error::new(ErrorKind::InvalidInput, "At least one of the generator is empty"));
-        }
-
-        // pad short generators with zeros
-        // TODO consider moving this part to another function and make this function take &self?
-        for mut g in &mut self.gs {
-            for _ in 0..max_len - g.len() {
-                g.push(0);
-            }
-        }
-
-        // check probability
-        if self.p > 1f64 || self.p < 0f64 {
-            return Err(Error::new(ErrorKind::InvalidInput, "Probability is invalid"));
-        }
-
-        Ok(())
     }
+    Ok(res)
 }
 
-/// For tracking the decoding progress and some key data
-pub struct Results {
-    pub m: usize,
-    pub n: usize,
-    pub encoded: Vec<u8>,
-    pub observed: Vec<u8>,
-    pub decoded: Vec<u8>,
-    /// The paths in the order which they are evaluated by the algorithm
-    pub paths: Vec<CodePath>,
+pub fn parse_gs(gs: &String) -> Result<Gens, Error> {
+    let mut res = Vec::new();
+    for g in gs.split(',') {
+        res.push(try!(parse_bin(g)));
+    }
+
+    if res.len() <= 0 {
+        return Err(Error::new(ErrorKind::InvalidInput, "No generators"));
+    }
+
+    // get the maximum length out of all the generators, consider using .map?
+    let max_len = {
+        let mut tmp_len = 0;
+        for g in &res {
+            if g.len() > tmp_len {
+                tmp_len = g.len();
+            }
+        }
+        tmp_len
+    };
+
+    if max_len <= 0 {
+        return Err(Error::new(ErrorKind::InvalidInput, "No generators"));
+    }
+
+    // pad short generators with zeros
+    for mut g in &mut res {
+        for _ in 0..max_len - g.len() {
+            g.push(0);
+        }
+    }
+
+    Ok(Gens::new(res))
+}
+
+pub fn parse_pr(pr: &str) -> Result<f64, Error> {
+    let p: f64 = match pr.parse() {
+        Ok(p) => p,
+        Err(_) => return Err(Error::new(ErrorKind::InvalidInput, "Parsing probability failed")),
+    };
+
+    if p > 1f64 || p < 0f64 {
+        return Err(Error::new(ErrorKind::InvalidInput, "Probability is invalid"));
+    }
+    Ok(p)
 }
 
 pub struct Gens {
@@ -84,12 +77,25 @@ pub struct Gens {
 
 impl Gens {
     pub fn new(gs: Vec<Vec<u8>>) -> Gens {
+        // we expect gs to be in the correct format (equal lengths and binary)
         Gens {
             m: gs[0].len() - 1,
             n: gs.len(),
             gs: gs,
         }
     }
+}
+
+/// For tracking the decoding progress and some key data
+#[derive(Debug)]
+pub struct Results {
+    pub m: usize,
+    pub n: usize,
+    pub encoded: Vec<u8>,
+    pub observed: Vec<u8>,
+    pub decoded: Vec<u8>,
+    /// The paths in the order which they are evaluated by the algorithm
+    pub paths: Vec<CodePath>,
 }
 
 // not the most efficient way encoding since the returned value must be drained

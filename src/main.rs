@@ -2,49 +2,63 @@ extern crate convolutional_stack;
 extern crate gtk;
 extern crate cairo;
 
-use std::io::{self};
+use std::io::{self, Error, ErrorKind};
 use convolutional_stack as cs;
 use gtk::{Orientation, Align};
 use gtk::prelude::*;
 use cairo::Context;
 
-/*
-fn err_and_exit(e: json::error::Error) {
-    writeln!(&mut io::stderr(), "{}", e);
-    ::std::process::exit(-1)
-}
-*/
-
+// make pack_start easier for default values
 macro_rules! pack_start {
-    ( $b:ident => $( $i:ident ),* ) => {
+    ( $b:ident => $( $i:ident ),+ ) => {
         $(
             $b.pack_start(&$i, true, true, 0);
-        )*
+        )+
     }
 }
 
-fn main() {
-    // TODO remove unwraps, make the code safer
-    /*
-    let mut inp: cc::Input = json::de::from_reader(io::stdin()).unwrap();
-    inp.validate().unwrap();
+// make moving clones into closures more convenient
+macro_rules! clone {
+    (@param _) => ( _ );
+    (@param $x:ident) => ( $x );
+    ($($n:ident),+ => move || $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+                move || $body
+        }
+    );
+    ($($n:ident),+ => move |$($p:tt),+| $body:expr) => (
+        {
+            $( let $n = $n.clone(); )+
+                move |$(clone!(@param $p),)+| $body
+        }
+    );
+}
 
-    let gs = cc::Gens::new(inp.gs);
-    let ys = cc::encode(&inp.xs, &gs);
+fn stack(xs: String, gs: String, pr: String) -> Result<(), Error>{
+    // shadow the input params
+    let xs = try!(cs::parse_bin(&xs));
+    let gs = try!(cs::parse_gs(&gs));
+    let pr = try!(cs::parse_pr(&pr));
 
-    let noisy_ys = cc::create_noise(&ys, inp.p);
-    let (path, paths) = cc::decode_(&noisy_ys, &gs, inp.p);
+    let ys = cs::encode(&xs, &gs);
+    let noisy_ys = cs::create_noise(&ys, pr);
+    let (path, paths) = cs::decode_(&noisy_ys, &gs, pr);
 
-    let output = cc::Results {
+    let output = cs::Results {
         m: gs.m,
         n: gs.n,
         encoded: ys,
         observed: noisy_ys,
         decoded: path.path,
-        paths: paths };
-    json::ser::to_writer(&mut io::stdout(), &output).unwrap();
-    */
+        paths: paths
+    };
+    println!("{:?}", output);
 
+    Ok(())
+}
+
+fn main() {
     gtk::init().unwrap();
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
@@ -93,6 +107,12 @@ fn main() {
 
     let btn_start = gtk::Button::new_with_label("START");
     let drawing = gtk::DrawingArea::new();
+    btn_start.connect_clicked(clone!(ent_xs, ent_gs, ent_pr => move |_| {
+        let xs = ent_xs.get_buffer().get_text();
+        let gs = ent_gs.get_buffer().get_text();
+        let pr = ent_pr.get_buffer().get_text();
+        stack(xs, gs, pr).unwrap();
+    }));
 
     // arrange widgets
     pack_start!(box_main => box_left, box_right);
