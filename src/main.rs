@@ -158,9 +158,7 @@ impl DrawingWindow {
 
         let shared_lvl = self.shared_lvl.clone();
         drawing.connect_draw(clone!(drawing => move |_, cr| {
-            cr.set_source_rgba(0.0, 0.0, 0.5, 1.0);
             let h = drawing.get_allocated_height() as f64;
-
             // show a message if there's nothing to be drawn
             if *shared_lvl.borrow() == 0 {
                 cr.move_to(0., h / 2.);
@@ -176,6 +174,16 @@ impl DrawingWindow {
             for i in 0..*shared_lvl.borrow() {
                 let path = &res.paths[i];
                 cr.move_to(0., h / 2.);
+
+                // use red for the final path
+                if i == res.paths.len() - 1 {
+                    cr.set_line_width(4.);
+                    cr.set_source_rgba(0.5, 0.0, 0.0, 1.0);
+                } else {
+                    cr.set_line_width(2.);
+                    cr.set_source_rgba(0.0, 0.0, 0.5, 1.0);
+                }
+
                 DrawingWindow::draw_path(cr, h / 2., 1, path.path.clone(), path.mu, decoded_l);
             }
 
@@ -183,6 +191,7 @@ impl DrawingWindow {
         }));
 
         // make and show popup
+        // no need delete event because the default action is to destroy the window
         let popup = gtk::Window::new(gtk::WindowType::Toplevel);
         popup.set_modal(true);
         popup.set_transient_for(Some(parent));
@@ -203,7 +212,6 @@ impl DrawingWindow {
             cr.rel_move_to(0., -15.); // no need to move back because we're return at the end
             cr.set_font_size(20.);
             cr.show_text(&format!("{:.2}", mu));
-            cr.set_line_width(2.);
             cr.stroke();
             return
         }
@@ -212,23 +220,28 @@ impl DrawingWindow {
         let (x, y) = cr.get_current_point();
         let h = h / 2.0; // shadow
         cr.arc(x, y, 5., 0., 2. * ::std::f64::consts::PI);
-        // cr.fill();
-
-        cr.move_to(x, y);
 
         // draw straight line if we're at the last m positions
         if lvl > l {
+            cr.set_dash(&[], 0.);
             cr.rel_line_to(STEP_PX, 0.);
         }
         else if p == 0 {
+            cr.set_dash(&[], 0.);
             cr.rel_line_to(STEP_PX, -h);
         }
         else if p == 1 {
+            cr.set_dash(&[8.0], 0.);
             cr.rel_line_to(STEP_PX, h);
         }
         else {
             panic!("Must be 0 or 1");
         }
+
+        // prepare the current point for the recursive step
+        let (x, y) = cr.get_current_point();
+        cr.stroke();
+        cr.move_to(x, y);
 
         // recursive step
         DrawingWindow::draw_path(cr, h, lvl+1, path, mu, l)
@@ -254,7 +267,7 @@ impl MainWindow {
 
         // input
         let lbl_xs = gtk::Label::new(Some("Binary input,\nany characters other than '0' or '1' are ignored."));
-        let ent_xs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("0101")));
+        let ent_xs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("01")));
         let sep_xs = gtk::Separator::new(Orientation::Horizontal);
         lbl_xs.set_halign(Align::Start);
         sep_xs.set_valign(Align::Center);
