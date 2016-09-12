@@ -91,8 +91,9 @@ impl Gens {
 pub struct StackResults {
     pub m: usize,
     pub n: usize,
-    pub encoded: Vec<u8>,
-    pub observed: Vec<u8>,
+    pub input: Vec<u8>,
+    pub encoded: Vec<u8>, // or transmitted
+    pub received: Vec<u8>,
     pub decoded: Vec<u8>,
     /// The paths in the order which they are evaluated by the algorithm
     pub paths: Vec<CodePath>,
@@ -103,8 +104,9 @@ impl StackResults {
         StackResults {
             m: 0,
             n: 0,
+            input: Vec::new(),
             encoded: Vec::new(),
-            observed: Vec::new(),
+            received: Vec::new(),
             decoded: Vec::new(),
             paths: Vec::new(),
         }
@@ -154,8 +156,8 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
 }
 
 // TODO provide an option to disable logging
-/// Same as `decode` but without post-processing, and returns a CodePath
-pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (CodePath, Vec<CodePath>) {
+/// Same as `decode` but returns a tuple of the result and the intermediate progress
+pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (Vec<u8>, Vec<CodePath>) {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
     let mut progress = Vec::new();
@@ -164,25 +166,27 @@ pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (CodePath, Vec<CodePath>) {
     loop {
         let best = heap.pop().unwrap();
         if best.path.len() >= gs.m + l {
-            return (best, progress);
+            progress.push(best.clone());
+            return (remove_final_m(best.path, gs.m), progress);
         }
 
-        let paths = best.extend(l, obs, gs, p);
-        for path in paths {
+        let extended = best.extend(l, obs, gs, p);
+        for path in extended {
             progress.push(path.clone());
             heap.push(path);
         }
     }
 }
 
+fn remove_final_m(mut ys: Vec<u8>, m: usize) -> Vec<u8> {
+    let n = ys.len() - m;
+    ys.truncate(n);
+    ys
+}
+
 /// Perform decoding using the stack algorithm
 pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
-    let mut ys = decode_(obs, gs, p).0.path;
-    // drop the final M zeros
-    for _ in 0..gs.m {
-        ys.pop().unwrap(); // unwrwap shouldn't fail if `encode` is used
-    }
-    ys
+    decode_(obs, gs, p).0
 }
 
 /// A path in the tree
@@ -309,7 +313,7 @@ fn test_decode_and_fano() {
     assert_eq!(vec![1,1], decode(&obs, &gs, p));
 
     // using the same params we can test the fano metric too
-    let best = decode_(&obs, &gs, p).0;
+    let best = decode_(&obs, &gs, p).1.pop().unwrap();
     // let worst = rest.first().unwrap();
     assert!(f64_eq(&-0.9310940439148156, &best.mu, &1e-6));
     // println!("{}", &worst.mu());

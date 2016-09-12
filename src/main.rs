@@ -91,9 +91,10 @@ fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackRes
     Ok(cs::StackResults {
         m: gs.m,
         n: gs.n,
+        input: xs,
         encoded: ys,
-        observed: noisy_ys,
-        decoded: path.path,
+        received: noisy_ys,
+        decoded: path,
         paths: paths
     })
 }
@@ -113,16 +114,17 @@ impl DrawingWindow {
         }
     }
 
-    fn run(&self, parent: &gtk::Window, res: cs::StackResults) {
-
+    fn run(&self, res: cs::StackResults) {
         // properties derived from results
         let drawing_w = max_len(&res.paths) * STEP_PX as usize + 100;
         let max_lvl = res.paths.len();
-        let decoded_l = res.decoded.len() - res.m;
+        let decoded_l = res.decoded.len();
 
-        // widgets
-        let box_popup = gtk::Box::new(Orientation::Vertical, 0);
+        // containers and widgets
+        let box_popup = gtk::Box::new(Orientation::Horizontal, 0);
+        let box_drawing = gtk::Box::new(Orientation::Vertical, 0);
         let box_nav = gtk::Box::new(Orientation::Horizontal, 0);
+        let grid_info = gtk::Grid::new();
 
         let drawing = gtk::DrawingArea::new();
         drawing.set_size_request(drawing_w as i32, 800);
@@ -132,10 +134,33 @@ impl DrawingWindow {
         btn_next.set_halign(Align::Center);
         btn_back.set_halign(Align::Center);
 
+        let lbl_xs = gtk::Label::new(Some("Input:"));
+        let lbl_tx = gtk::Label::new(Some("Encoded:"));
+        let lbl_rx = gtk::Label::new(Some("Received:"));
+        let lbl_out = gtk::Label::new(Some("Decoded:"));
+
+        let data_xs = gtk::Label::new(Some(&format_bin(&res.input)));
+        let data_tx = gtk::Label::new(Some(&format_bin(&res.encoded)));
+        let data_rx = gtk::Label::new(Some(&format_bin(&res.received)));
+        let data_out = gtk::Label::new(Some(&format_bin(&res.decoded)));
+
         // set layout
+        grid_info.attach(&lbl_xs, 0, 0, 1, 1);
+        grid_info.attach(&lbl_tx, 0, 1, 1, 1);
+        grid_info.attach(&lbl_rx, 0, 2, 1, 1);
+        grid_info.attach(&lbl_out, 0, 3, 1, 1);
+
+        grid_info.attach(&data_xs, 1, 0, 1, 1);
+        grid_info.attach(&data_tx, 1, 1, 1, 1);
+        grid_info.attach(&data_rx, 1, 2, 1, 1);
+        grid_info.attach(&data_out, 1, 3, 1, 1);
+
         pack_start!(box_nav, true, false => btn_back, btn_next);
-        box_popup.pack_start(&drawing, true, true, 0);
-        box_popup.pack_end(&box_nav, true, true, 0);
+        box_drawing.pack_start(&drawing, true, true, 0);
+        box_drawing.pack_end(&box_nav, true, true, 0);
+
+        box_popup.pack_start(&box_drawing, true, true, 0);
+        box_popup.pack_start(&grid_info, true, true, 0);
 
         // callbacks
         let shared_lvl = self.shared_lvl.clone();
@@ -193,17 +218,9 @@ impl DrawingWindow {
         // make and show popup
         // no need delete event because the default action is to destroy the window
         let popup = gtk::Window::new(gtk::WindowType::Toplevel);
-        popup.set_modal(true);
-        popup.set_transient_for(Some(parent));
         popup.set_title("tree");
         popup.set_border_width(10);
         popup.add(&box_popup);
-
-        // move to the right of the parent window
-        let (parent_x, parent_y) = parent.get_position();
-        let (parent_w, _) = parent.get_size();
-        popup.move_(parent_x + parent_w, parent_y);
-
         popup.show_all();
     }
 
@@ -361,7 +378,7 @@ impl MainWindow {
             let res = error_dialog!(window, run_stack_algo(&xs, &gs, &pr, &rx));
 
             let dw = DrawingWindow::new();
-            dw.run(&window, res); // blocks?
+            dw.run(res); // blocks?
         }));
 
         // main window
