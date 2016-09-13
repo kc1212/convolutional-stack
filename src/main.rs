@@ -57,6 +57,36 @@ macro_rules! error_dialog {
     }
 }
 
+// markup in pango
+fn format_gens(gs: &Vec<Vec<u8>>) -> String {
+    let format_gen = |g: &Vec<u8>| -> String {
+        let mut res = "".to_string();
+        for (i, val) in g.iter().enumerate() {
+            match i {
+                0 => res.push_str(&format!("{} + ", val)),
+                _ => {
+                    match val {
+                        &0 => (),
+                        &1 => res.push_str(&format!("x<sup>{}</sup> + ", i)),
+                        _ => panic!("Generator coefficient must be either 0 or 1"),
+                    }
+                }
+            }
+        }
+        let new_len = res.len() - 3;
+        res.truncate(new_len);
+        res
+    };
+
+    let mut res = "".to_string();
+    for g in gs {
+        res.push_str(&format_gen(g));
+        res.push('\n');
+    }
+    res.pop().unwrap(); // remove the final \n
+    res
+}
+
 fn format_bin(xs: &Vec<u8>) -> String {
     xs.iter().map(|x| {
         match x {
@@ -89,8 +119,7 @@ fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackRes
     let (path, paths) = cs::decode_(&noisy_ys, &gs, pr);
 
     Ok(cs::StackResults {
-        m: gs.m,
-        n: gs.n,
+        gens: gs,
         input: xs,
         encoded: ys,
         received: noisy_ys,
@@ -125,6 +154,7 @@ impl DrawingWindow {
         let box_drawing = gtk::Box::new(Orientation::Vertical, 0);
         let box_nav = gtk::Box::new(Orientation::Horizontal, 0);
         let grid_info = gtk::Grid::new();
+        grid_info.set_column_spacing(10);
 
         let drawing = gtk::DrawingArea::new();
         drawing.set_size_request(drawing_w as i32, 800);
@@ -138,22 +168,36 @@ impl DrawingWindow {
         let lbl_tx = gtk::Label::new(Some("Encoded:"));
         let lbl_rx = gtk::Label::new(Some("Received:"));
         let lbl_out = gtk::Label::new(Some("Decoded:"));
+        let lbl_m = gtk::Label::new(Some("Order (m):"));
+        let lbl_rate = gtk::Label::new(Some("Code rate:"));
+        let lbl_gens = gtk::Label::new(Some("Generators:"));
 
         let data_xs = gtk::Label::new(Some(&format_bin(&res.input)));
         let data_tx = gtk::Label::new(Some(&format_bin(&res.encoded)));
         let data_rx = gtk::Label::new(Some(&format_bin(&res.received)));
         let data_out = gtk::Label::new(Some(&format_bin(&res.decoded)));
+        let data_m = gtk::Label::new(Some(&res.gens.m.to_string()));
+        let rate = decoded_l as f64 / res.encoded.len() as f64;
+        let data_rate = gtk::Label::new(Some(&format!("{:.2}", rate)));
+        let data_gens = gtk::Label::new(None);
+        data_gens.set_markup(&format_gens(&res.gens.gs));
 
         // set layout
         grid_info.attach(&lbl_xs, 0, 0, 1, 1);
         grid_info.attach(&lbl_tx, 0, 1, 1, 1);
         grid_info.attach(&lbl_rx, 0, 2, 1, 1);
         grid_info.attach(&lbl_out, 0, 3, 1, 1);
+        grid_info.attach(&lbl_m, 0, 4, 1, 1);
+        grid_info.attach(&lbl_rate, 0, 5, 1, 1);
+        grid_info.attach(&lbl_gens, 0, 6, 1, 1);
 
         grid_info.attach(&data_xs, 1, 0, 1, 1);
         grid_info.attach(&data_tx, 1, 1, 1, 1);
         grid_info.attach(&data_rx, 1, 2, 1, 1);
         grid_info.attach(&data_out, 1, 3, 1, 1);
+        grid_info.attach(&data_m, 1, 4, 1, 1);
+        grid_info.attach(&data_rate, 1, 5, 1, 1);
+        grid_info.attach(&data_gens, 1, 6, 1, 1);
 
         pack_start!(box_nav, true, false => btn_back, btn_next);
         box_drawing.pack_start(&drawing, true, true, 0);
@@ -388,6 +432,7 @@ impl MainWindow {
         // window.set_default_size(800, 600);
 
         window.connect_delete_event(|_, _| {
+            // also closes the DrawingWindow(s)
             gtk::main_quit();
             Inhibit(false)
         });

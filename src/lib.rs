@@ -69,8 +69,9 @@ pub fn parse_pr(pr: &str) -> Result<f64, Error> {
     Ok(p)
 }
 
+#[derive(Debug)]
 pub struct Gens {
-    gs: Vec<Vec<u8>>,
+    pub gs: Vec<Vec<u8>>,
     pub m: usize,
     pub n: usize,
 }
@@ -89,28 +90,13 @@ impl Gens {
 /// For tracking the decoding progress and some key data
 #[derive(Debug)]
 pub struct StackResults {
-    pub m: usize,
-    pub n: usize,
+    pub gens: Gens,
     pub input: Vec<u8>,
     pub encoded: Vec<u8>, // or transmitted
     pub received: Vec<u8>,
     pub decoded: Vec<u8>,
     /// The paths in the order which they are evaluated by the algorithm
     pub paths: Vec<CodePath>,
-}
-
-impl StackResults {
-    pub fn new() -> StackResults {
-        StackResults {
-            m: 0,
-            n: 0,
-            input: Vec::new(),
-            encoded: Vec::new(),
-            received: Vec::new(),
-            decoded: Vec::new(),
-            paths: Vec::new(),
-        }
-    }
 }
 
 // not the most efficient way encoding since the returned value must be drained
