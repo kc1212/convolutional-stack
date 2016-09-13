@@ -68,7 +68,7 @@ fn format_gens(gs: &Vec<Vec<u8>>) -> String {
                     match val {
                         &0 => (),
                         &1 => res.push_str(&format!("x<sup>{}</sup> + ", i)),
-                        _ => panic!("Generator coefficient must be either 0 or 1"),
+                        _ => panic!("Not binary!"),
                     }
                 }
             }
@@ -87,12 +87,26 @@ fn format_gens(gs: &Vec<Vec<u8>>) -> String {
     res
 }
 
+fn bin_to_char(x: &u8) -> char {
+    match x {
+        &0 => '0',
+        &1 => '1',
+        _ => panic!("Not binary!"),
+    }
+}
+
 fn format_bin(xs: &Vec<u8>) -> String {
     xs.iter().map(|x| {
-        match x {
-            &0 => '0',
-            &1 => '1',
-            _ => panic!("Not binary!"),
+        bin_to_char(x)
+    }).collect()
+}
+
+// markup with pango
+fn format_bin_with_error(xs: &Vec<u8>, ys: &Vec<u8>) -> String {
+    xs.iter().zip(ys.iter()).map(|(x, y)| {
+        match x == y {
+            true => format!("<span>{}</span>", bin_to_char(y)),
+            false => format!("<span foreground=\"red\">{}</span>", bin_to_char(y)),
         }
     }).collect()
 }
@@ -174,8 +188,10 @@ impl DrawingWindow {
 
         let data_xs = gtk::Label::new(Some(&format_bin(&res.input)));
         let data_tx = gtk::Label::new(Some(&format_bin(&res.encoded)));
-        let data_rx = gtk::Label::new(Some(&format_bin(&res.received)));
-        let data_out = gtk::Label::new(Some(&format_bin(&res.decoded)));
+        let data_rx = gtk::Label::new(None);
+        data_rx.set_markup(&format_bin_with_error(&res.encoded, &res.received));
+        let data_out = gtk::Label::new(None);
+        data_out.set_markup(&format_bin_with_error(&res.input, &res.decoded));
         let data_m = gtk::Label::new(Some(&res.gens.m.to_string()));
         let rate = decoded_l as f64 / res.encoded.len() as f64;
         let data_rate = gtk::Label::new(Some(&format!("{:.2}", rate)));
