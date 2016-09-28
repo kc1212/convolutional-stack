@@ -148,7 +148,7 @@ pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (Vec<u8>, Vec<CodePath>) {
     let l = obs.len() / gs.n - gs.m;
     let mut progress = Vec::new();
 
-    heap.push(CodePath { path: Vec::new(), mu: 0f64 });
+    heap.push(CodePath { path: Vec::new(), code: Vec::new(), mu: 0f64 });
     loop {
         let best = heap.pop().unwrap();
         if best.path.len() >= gs.m + l {
@@ -179,6 +179,7 @@ pub fn decode(obs: &Vec<u8>, gs: &Gens, p: f64) -> Vec<u8> {
 #[derive(Clone, Debug)]
 pub struct CodePath {
     pub path: Vec<u8>,
+    pub code: Vec<u8>, // only used to display intermediate results
     pub mu: f64,
 }
 
@@ -245,8 +246,12 @@ impl CodePath {
             }
         }
 
+        // copy the intermediate code for reporting
+        self.code = _xs.clone();
+
         // update mu to be the fano metric for the whole path
         self.mu = self.mu + mu;
+
     }
 }
 

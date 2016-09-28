@@ -9,7 +9,7 @@ use convolutional_stack as cs;
 use gtk::{Orientation, Align, MessageType, ButtonsType};
 use gtk::prelude::*;
 
-const STEP_PX: f64 = 100.;
+const STEP_PX: f64 = 120.;
 
 // make pack_start easier for default values
 macro_rules! pack_start {
@@ -159,7 +159,7 @@ impl DrawingWindow {
 
     fn run(&self, res: cs::StackResults) {
         // properties derived from results
-        let drawing_w = max_len(&res.paths) * STEP_PX as usize + 100;
+        let drawing_w = max_len(&res.paths) * STEP_PX as usize + 150;
         let max_lvl = res.paths.len();
         let decoded_l = res.decoded.len();
 
@@ -274,13 +274,13 @@ impl DrawingWindow {
                 // use red for the final path
                 if i == res.paths.len() - 1 {
                     cr.set_line_width(4.);
-                    cr.set_source_rgba(0.5, 0.0, 0.0, 1.0);
+                    cr.set_source_rgb(1.0, 0.5, 0.5);
                 } else {
                     cr.set_line_width(2.);
-                    cr.set_source_rgba(0.0, 0.0, 0.5, 1.0);
+                    cr.set_source_rgb(0.5, 0.5, 1.0);
                 }
 
-                DrawingWindow::draw_path(cr, h / 2., 1, path.path.clone(), path.mu, decoded_l);
+                DrawingWindow::draw_path(cr, h / 2., 1, path.path.clone(), &path.code, path.mu, decoded_l);
             }
 
             Inhibit(false)
@@ -295,11 +295,12 @@ impl DrawingWindow {
         popup.show_all();
     }
 
-    fn draw_path(cr: &cairo::Context, h: f64, lvl: usize, mut path: Vec<u8>, mu: f64, l: usize) {
+    fn draw_path(cr: &cairo::Context, h: f64, lvl: usize, mut path: Vec<u8>, code: &Vec<u8>, mu: f64, l: usize) {
         if path.is_empty() {
             cr.rel_move_to(0., -15.); // no need to move back because we're return at the end
-            cr.set_font_size(20.);
-            cr.show_text(&format!("{:.2}", mu));
+            cr.set_font_size(15.);
+            cr.set_source_rgb(0., 0., 0.);
+            cr.show_text(&format!("{} | {:.2}", &format_bin(code), mu));
             cr.stroke();
             return
         }
@@ -332,7 +333,7 @@ impl DrawingWindow {
         cr.move_to(x, y);
 
         // recursive step
-        DrawingWindow::draw_path(cr, h, lvl+1, path, mu, l)
+        DrawingWindow::draw_path(cr, h, lvl+1, path, code, mu, l)
     }
 }
 
