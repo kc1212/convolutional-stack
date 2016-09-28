@@ -224,25 +224,35 @@ impl DrawingWindow {
 
         // callbacks
         let shared_lvl = self.shared_lvl.clone();
-        btn_next.connect_clicked(clone!(drawing => move |_| {
+        btn_next.connect_clicked(clone!(drawing, btn_back, btn_next => move |_| {
             let lvl = *shared_lvl.borrow_mut();
             if lvl < max_lvl {
                 *shared_lvl.borrow_mut() = lvl + 1;
+                drawing.queue_draw();
+
+                btn_back.set_sensitive(true);
+                if *shared_lvl.borrow_mut() == max_lvl {
+                    btn_next.set_sensitive(false);
+                }
             }
-            drawing.queue_draw();
         }));
 
         let shared_lvl = self.shared_lvl.clone();
-        btn_back.connect_clicked(clone!(drawing => move |_| {
+        btn_back.connect_clicked(clone!(drawing, btn_back, btn_next => move |_| {
             let lvl = *shared_lvl.borrow_mut();
             if lvl > 0 {
                 *shared_lvl.borrow_mut() = lvl - 1;
+                drawing.queue_draw();
+
+                btn_next.set_sensitive(true);
+                if *shared_lvl.borrow_mut() == 0 {
+                    btn_back.set_sensitive(false);
+                }
             }
-            drawing.queue_draw();
         }));
 
         let shared_lvl = self.shared_lvl.clone();
-        drawing.connect_draw(clone!(drawing => move |_, cr| {
+        drawing.connect_draw(clone!(drawing, btn_back => move |_, cr| {
             let h = drawing.get_allocated_height() as f64;
             // show a message if there's nothing to be drawn
             if *shared_lvl.borrow() == 0 {
@@ -252,6 +262,7 @@ impl DrawingWindow {
                 cr.move_to(0., h / 2. + 30.);
                 cr.show_text("and the '<' button to step back.");
                 cr.stroke();
+                btn_back.set_sensitive(false);
                 return Inhibit(false);
             }
 
