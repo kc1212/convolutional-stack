@@ -141,14 +141,16 @@ fn getx(xs: &Vec<u8>, i: usize, j: usize) -> u8 {
     xs[i - j]
 }
 
-// TODO provide an option to disable logging
 /// Same as `decode` but returns a tuple of the result and the intermediate progress
 pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (Vec<u8>, Vec<CodePath>) {
     let mut heap = BinaryHeap::new();
     let l = obs.len() / gs.n - gs.m;
     let mut progress = Vec::new();
 
+    // the single node path
     heap.push(CodePath { path: Vec::new(), code: Vec::new(), mu: 0f64 });
+
+    // loop until a complete path is found
     loop {
         let best = heap.pop().unwrap();
         if best.path.len() >= gs.m + l {
@@ -205,9 +207,10 @@ impl Ord for CodePath {
 }
 
 impl CodePath {
-    /// Consumes myself and create new branches,
+    /// Consumes myself and create new branche(s),
     /// this function depends on previously computed paths and fano metric.
     fn extend(mut self, l: usize, ys: &Vec<u8>, gs: &Gens, p: f64) -> Vec<CodePath> {
+        // println!("Extending {:?}", self.path);
         let mut v = Vec::new();
         if self.path.len() < l {
             let mut p1 = self;

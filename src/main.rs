@@ -176,7 +176,9 @@ impl DrawingWindow {
         let btn_next = gtk::Button::new_with_label(">");
         let btn_back = gtk::Button::new_with_label("<");
         btn_next.set_halign(Align::Center);
+        btn_next.set_tooltip_text(Some("Draw in next path in the decoding tree."));
         btn_back.set_halign(Align::Center);
+        btn_back.set_tooltip_text(Some("Move back one step in the decoding tree."));
 
         let lbl_xs = gtk::Label::new(Some("Input:"));
         let lbl_tx = gtk::Label::new(Some("Encoded:"));
@@ -198,6 +200,29 @@ impl DrawingWindow {
         let data_gens = gtk::Label::new(None);
         data_gens.set_markup(&format_gens(&res.gens.gs));
 
+        let lbl_info = gtk::Label::new(Some("Instructions:\n\
+                                             \n\
+                                             Click the '>' button to\n\
+                                             incrementally draw the tree.\n\
+                                             \n\
+                                             Click the '<' button to\n\
+                                             move one step back.\n\
+                                             \n\
+                                             Solid lines represent 0,\n\
+                                             dotted lines represent 1.\n\
+                                             \n\
+                                             Intermediate paths are in blue,\n\
+                                             the final path is in red.\n\
+                                             \n\
+                                             Every node has a value x | y,\n\
+                                             x is the intermediate code,\n\
+                                             y is the Fano metric value.\n\
+                                             "));
+        lbl_info.set_halign(Align::Start);
+        let sep_info = gtk::Separator::new(Orientation::Horizontal);
+        sep_info.set_margin_top(20);
+        sep_info.set_margin_bottom(20);
+
         // set layout
         grid_info.attach(&lbl_xs, 0, 0, 1, 1);
         grid_info.attach(&lbl_tx, 0, 1, 1, 1);
@@ -214,6 +239,9 @@ impl DrawingWindow {
         grid_info.attach(&data_m, 1, 4, 1, 1);
         grid_info.attach(&data_rate, 1, 5, 1, 1);
         grid_info.attach(&data_gens, 1, 6, 1, 1);
+
+        grid_info.attach(&sep_info, 0, 9, 2, 1);
+        grid_info.attach(&lbl_info, 0, 10, 2, 1);
 
         pack_start!(box_nav, true, false => btn_back, btn_next);
         box_drawing.pack_start(&drawing, true, true, 0);
@@ -254,14 +282,8 @@ impl DrawingWindow {
         let shared_lvl = self.shared_lvl.clone();
         drawing.connect_draw(clone!(drawing, btn_back => move |_, cr| {
             let h = drawing.get_allocated_height() as f64;
-            // show a message if there's nothing to be drawn
+            // nothing to be drawn
             if *shared_lvl.borrow() == 0 {
-                cr.move_to(0., h / 2.);
-                cr.set_font_size(20.);
-                cr.show_text("Click the '>' button to incrementally draw the tree");
-                cr.move_to(0., h / 2. + 30.);
-                cr.show_text("and the '<' button to step back.");
-                cr.stroke();
                 btn_back.set_sensitive(false);
                 return Inhibit(false);
             }
@@ -364,7 +386,8 @@ impl MainWindow {
         sep_xs.set_margin_bottom(sep_margin);
 
         // generators
-        let lbl_gs = gtk::Label::new(Some("Generators, separated by commas."));
+        let lbl_gs = gtk::Label::new(None);
+        lbl_gs.set_markup("Generator coefficients,\ni.e. 1 + x<sup>2</sup> + x<sup>3</sup> = 1011, separated by commas.");
         let ent_gs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("101,110")));
         let sep_gs = gtk::Separator::new(Orientation::Horizontal);
         lbl_gs.set_halign(Align::Start);
@@ -382,9 +405,10 @@ impl MainWindow {
         sep_pr.set_margin_bottom(sep_margin);
 
         // transmitted
-        let lbl_tx = gtk::Label::new(Some("Transmitted bits\nclick the 'r' button to refresh"));
+        let lbl_tx = gtk::Label::new(Some("Transmitted bits,\nrefresh the code by clicking the icon."));
         let ent_tx = gtk::Label::new(Some("")); // actually a label
-        let btn_tx = gtk::Button::new_with_label("r"); // TODO use refresh icon
+        let btn_tx = gtk::Button::new_from_icon_name("view-refresh", 2);
+        btn_tx.set_tooltip_text(Some("Refresh the transmitted code according to the input and the genreator."));
         let sep_tx = gtk::Separator::new(Orientation::Horizontal);
         lbl_tx.set_halign(Align::Start);
         ent_tx.set_selectable(true);
@@ -394,9 +418,10 @@ impl MainWindow {
         sep_tx.set_margin_bottom(sep_margin);
 
         // received
-        let lbl_rx = gtk::Label::new(Some("Received bits\nclick the 'r' button to randomise"));
+        let lbl_rx = gtk::Label::new(Some("Received bits,\nrandomise the bits by clicking the icon."));
         let ent_rx = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(None));
-        let btn_rx = gtk::Button::new_with_label("r"); // TODO use dice icon
+        let btn_rx = gtk::Button::new_from_icon_name("media-playlist-shuffle", 2);
+        btn_rx.set_tooltip_text(Some("Randomise the received code based on the transmitted code and the error probability, assuming a BSC."));
         let sep_rx = gtk::Separator::new(Orientation::Horizontal);
         lbl_rx.set_halign(Align::Start);
         sep_rx.set_valign(Align::Center);
