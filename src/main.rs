@@ -195,9 +195,7 @@ impl DrawingWindow {
 
         let btn_next = gtk::Button::new_with_label(">");
         let btn_back = gtk::Button::new_with_label("<");
-        btn_next.set_halign(Align::Center);
         btn_next.set_tooltip_text(Some("Draw in next path in the decoding tree."));
-        btn_back.set_halign(Align::Center);
         btn_back.set_tooltip_text(Some("Move back one step in the decoding tree."));
 
         let lbl_xs = gtk::Label::new(Some("Input:"));
@@ -268,7 +266,9 @@ impl DrawingWindow {
         grid_info.attach(&sep_info, 0, 9, 2, 1);
         grid_info.attach(&lbl_info, 0, 10, 2, 1);
 
-        pack_start!(box_nav, true, false => btn_back, btn_next);
+        box_nav.pack_start(&btn_back, true, true, 20);
+        box_nav.pack_start(&btn_next, true, true, 20);
+
         box_drawing.pack_start(&drawing, true, true, 0);
         box_drawing.pack_end(&box_nav, true, true, 0);
 
@@ -403,7 +403,7 @@ impl MainWindow {
 
         // input
         let lbl_xs = gtk::Label::new(Some("Binary input,\nany characters other than '0' or '1' are ignored."));
-        let ent_xs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("01")));
+        let ent_xs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("0101")));
         let sep_xs = gtk::Separator::new(Orientation::Horizontal);
         lbl_xs.set_halign(Align::Start);
         sep_xs.set_valign(Align::Center);
@@ -413,7 +413,7 @@ impl MainWindow {
         // generators
         let lbl_gs = gtk::Label::new(None);
         lbl_gs.set_markup("Generator coefficients,\ni.e. 1 + x<sup>2</sup> + x<sup>3</sup> = 1011, separated by commas.");
-        let ent_gs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("101,110")));
+        let ent_gs = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("111,110,101")));
         let sep_gs = gtk::Separator::new(Orientation::Horizontal);
         lbl_gs.set_halign(Align::Start);
         sep_gs.set_valign(Align::Center);
@@ -485,12 +485,12 @@ impl MainWindow {
         }));
 
         btn_rx.connect_clicked(clone!(ent_pr, ent_tx, ent_rx, ent_gs, window => move |_| {
-            let ys = error_dialog!(window, cs::parse_bin(&{
-                match ent_tx.get_text() {
+            let ys = error_dialog!(window, cs::parse_bin(
+                &match ent_tx.get_text() {
                     Some(x) => x,
                     None    => "".to_string(),
                 }
-            }));
+            ));
             let pr = error_dialog!(window, cs::parse_pr(&ent_pr.get_buffer().get_text()));
             let noisy_ys = cs::create_noise(&ys, pr);
 
