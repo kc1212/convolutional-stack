@@ -57,6 +57,26 @@ macro_rules! error_dialog {
     }
 }
 
+fn spacing(xs: &str, size: usize) -> String {
+
+    assert_eq!(xs.len() % size, 0);
+
+    let sep = [b' '];
+    let chunks = append_before(&xs.as_bytes().chunks(size).collect(), &sep);
+    chunks.iter().fold(String::new(), |acc, chunk| {
+        acc + &String::from_utf8(chunk.to_vec()).unwrap()
+    })
+}
+
+fn append_before<T: Copy>(xs: &Vec<T>, sep: T) -> Vec<T> {
+    let mut res = Vec::new();
+    for x in xs {
+        res.push(sep);
+        res.push(*x);
+    }
+    res
+}
+
 // markup in pango
 fn format_gens(gs: &Vec<Vec<u8>>) -> String {
     let format_gen = |g: &Vec<u8>| -> String {
@@ -185,7 +205,8 @@ impl DrawingWindow {
         let lbl_rx = gtk::Label::new(Some("Received:"));
         let lbl_out = gtk::Label::new(Some("Decoded:"));
         let lbl_m = gtk::Label::new(Some("Order (m):"));
-        let lbl_rate = gtk::Label::new(Some("Code rate:"));
+        let lbl_actual_rate = gtk::Label::new(Some("Actual Rate:"));
+        let lbl_asymptotic_rate = gtk::Label::new(Some("Asymtotic rate:"));
         let lbl_gens = gtk::Label::new(Some("Generators:"));
 
         let data_xs = gtk::Label::new(Some(&format_bin(&res.input)));
@@ -195,12 +216,14 @@ impl DrawingWindow {
         let data_out = gtk::Label::new(None);
         data_out.set_markup(&format_bin_with_error(&res.input, &res.decoded));
         let data_m = gtk::Label::new(Some(&res.gens.m.to_string()));
-        let rate = decoded_l as f64 / res.encoded.len() as f64;
-        let data_rate = gtk::Label::new(Some(&format!("{:.2}", rate)));
+        let actual_rate = decoded_l as f64 / res.encoded.len() as f64;
+        let asymptotic_rate = 1.0 / res.gens.n as f64;
+        let data_actual_rate = gtk::Label::new(Some(&format!("{:.2}", actual_rate)));
+        let data_asymptotic_rate = gtk::Label::new(Some(&format!("{:.2}", asymptotic_rate)));
         let data_gens = gtk::Label::new(None);
         data_gens.set_markup(&format_gens(&res.gens.gs));
 
-        let lbl_info = gtk::Label::new(Some("Instructions:\n\
+        let lbl_info = gtk::Label::new(Some("User guide:\n\
                                              \n\
                                              Click the '>' button to\n\
                                              incrementally draw the tree.\n\
@@ -214,7 +237,7 @@ impl DrawingWindow {
                                              Intermediate paths are in blue,\n\
                                              the final path is in red.\n\
                                              \n\
-                                             Every node has a value x | y,\n\
+                                             Every node has two values x | y,\n\
                                              x is the intermediate code,\n\
                                              y is the Fano metric value.\n\
                                              "));
@@ -229,16 +252,18 @@ impl DrawingWindow {
         grid_info.attach(&lbl_rx, 0, 2, 1, 1);
         grid_info.attach(&lbl_out, 0, 3, 1, 1);
         grid_info.attach(&lbl_m, 0, 4, 1, 1);
-        grid_info.attach(&lbl_rate, 0, 5, 1, 1);
-        grid_info.attach(&lbl_gens, 0, 6, 1, 1);
+        grid_info.attach(&lbl_actual_rate, 0, 5, 1, 1);
+        grid_info.attach(&lbl_asymptotic_rate, 0, 6, 1, 1);
+        grid_info.attach(&lbl_gens, 0, 7, 1, 1);
 
         grid_info.attach(&data_xs, 1, 0, 1, 1);
         grid_info.attach(&data_tx, 1, 1, 1, 1);
         grid_info.attach(&data_rx, 1, 2, 1, 1);
         grid_info.attach(&data_out, 1, 3, 1, 1);
         grid_info.attach(&data_m, 1, 4, 1, 1);
-        grid_info.attach(&data_rate, 1, 5, 1, 1);
-        grid_info.attach(&data_gens, 1, 6, 1, 1);
+        grid_info.attach(&data_actual_rate, 1, 5, 1, 1);
+        grid_info.attach(&data_asymptotic_rate, 1, 6, 1, 1);
+        grid_info.attach(&data_gens, 1, 7, 1, 1);
 
         grid_info.attach(&sep_info, 0, 9, 2, 1);
         grid_info.attach(&lbl_info, 0, 10, 2, 1);
@@ -447,14 +472,19 @@ impl MainWindow {
         box_main.pack_end(&btn_start, false, false, 0);
 
         // call backs
-        btn_tx.connect_clicked(clone!(ent_xs, ent_gs, ent_tx => move |_| {
+        btn_tx.connect_clicked(clone!(ent_xs, ent_gs, ent_tx, window => move |_| {
             let xs = ent_xs.get_buffer().get_text();
             let gs = ent_gs.get_buffer().get_text();
-            let ys = encode_main(&xs, &gs).unwrap();
-            ent_tx.set_text(&format_bin(&ys));
+            let ys = error_dialog!(window, encode_main(&xs, &gs));
+
+            // shouldn't fail because we parsed gs before already
+            // TODO consider storing gs as an attribute instead of parsing it again
+            let n = cs::parse_gs(&gs).unwrap().n;
+
+            ent_tx.set_text(&spacing(&format_bin(&ys), n));
         }));
 
-        btn_rx.connect_clicked(clone!(ent_pr, ent_tx, ent_rx, window => move |_| {
+        btn_rx.connect_clicked(clone!(ent_pr, ent_tx, ent_rx, ent_gs, window => move |_| {
             let ys = error_dialog!(window, cs::parse_bin(&{
                 match ent_tx.get_text() {
                     Some(x) => x,
@@ -463,7 +493,12 @@ impl MainWindow {
             }));
             let pr = error_dialog!(window, cs::parse_pr(&ent_pr.get_buffer().get_text()));
             let noisy_ys = cs::create_noise(&ys, pr);
-            ent_rx.set_text(&format_bin(&noisy_ys));
+
+            // shouldn't fail because we parsed gs before already
+            // TODO consider storing gs as an attribute
+            let n = cs::parse_gs(&ent_gs.get_buffer().get_text()).unwrap().n;
+
+            ent_rx.set_text(&spacing(&format_bin(&noisy_ys), n));
         }));
 
         btn_start.connect_clicked(clone!(ent_xs, ent_gs, ent_pr, ent_rx, window => move |_| {
@@ -475,7 +510,7 @@ impl MainWindow {
             let res = error_dialog!(window, run_stack_algo(&xs, &gs, &pr, &rx));
 
             let dw = DrawingWindow::new();
-            dw.run(res); // blocks?
+            dw.run(res);
         }));
 
         // main window
