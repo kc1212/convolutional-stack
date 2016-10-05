@@ -63,7 +63,7 @@ pub fn parse_pr(pr: &str) -> Result<f64, Error> {
         Err(_) => return Err(Error::new(ErrorKind::InvalidInput, "Parsing probability failed")),
     };
 
-    if p > 1f64 || p < 0f64 {
+    if p > 0.5f64 || p < 0f64 {
         return Err(Error::new(ErrorKind::InvalidInput, "Probability is invalid"));
     }
     Ok(p)

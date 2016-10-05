@@ -211,8 +211,7 @@ impl DrawingWindow {
         let data_tx = gtk::Label::new(Some(&format_bin(&res.encoded)));
         let data_rx = gtk::Label::new(None);
         data_rx.set_markup(&format_bin_with_error(&res.encoded, &res.received));
-        let data_out = gtk::Label::new(None);
-        data_out.set_markup(&format_bin_with_error(&res.input, &res.decoded));
+        let data_out = gtk::Label::new(Some("n/a"));
         let data_m = gtk::Label::new(Some(&res.gens.m.to_string()));
         let actual_rate = decoded_l as f64 / res.encoded.len() as f64;
         let asymptotic_rate = 1.0 / res.gens.n as f64;
@@ -305,7 +304,7 @@ impl DrawingWindow {
         }));
 
         let shared_lvl = self.shared_lvl.clone();
-        drawing.connect_draw(clone!(drawing, btn_back => move |_, cr| {
+        drawing.connect_draw(clone!(drawing, btn_back, data_out => move |_, cr| {
             let h = drawing.get_allocated_height() as f64;
             // nothing to be drawn
             if *shared_lvl.borrow() == 0 {
@@ -322,9 +321,11 @@ impl DrawingWindow {
                 if i == res.paths.len() - 1 {
                     cr.set_line_width(4.);
                     cr.set_source_rgb(1.0, 0.5, 0.5);
+                    data_out.set_markup(&format_bin_with_error(&res.input, &res.decoded));
                 } else {
                     cr.set_line_width(2.);
                     cr.set_source_rgb(0.5, 0.5, 1.0);
+                    data_out.set_text("n/a");
                 }
 
                 DrawingWindow::draw_path(cr, h / 2., 1, path.path.clone(), &path.code, path.mu, decoded_l);
@@ -421,7 +422,7 @@ impl MainWindow {
         sep_gs.set_margin_bottom(sep_margin);
 
         // error probability
-        let lbl_pr = gtk::Label::new(Some("Error probability p, where 0 < p < 1."));
+        let lbl_pr = gtk::Label::new(Some("Error probability p, where 0 < p < 0.5."));
         let ent_pr = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(Some("0.1")));
         let sep_pr = gtk::Separator::new(Orientation::Horizontal);
         lbl_pr.set_halign(Align::Start);
