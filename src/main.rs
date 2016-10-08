@@ -63,9 +63,8 @@ fn spacing(xs: &str, size: usize) -> String {
 
     let sep = [b' '];
     let chunks = append_before(&xs.as_bytes().chunks(size).collect(), &sep);
-    chunks.iter().fold(String::new(), |acc, chunk| {
-        acc + &String::from_utf8(chunk.to_vec()).unwrap()
-    })
+    chunks.iter().fold(String::new(),
+                       |acc, chunk| acc + &String::from_utf8(chunk.to_vec()).unwrap())
 }
 
 fn append_before<T: Copy>(xs: &Vec<T>, sep: T) -> Vec<T> {
@@ -116,19 +115,22 @@ fn bin_to_char(x: &u8) -> char {
 }
 
 fn format_bin(xs: &Vec<u8>) -> String {
-    xs.iter().map(|x| {
-        bin_to_char(x)
-    }).collect()
+    xs.iter()
+        .map(|x| bin_to_char(x))
+        .collect()
 }
 
 // markup with pango
 fn format_bin_with_error(xs: &Vec<u8>, ys: &Vec<u8>) -> String {
-    xs.iter().zip(ys.iter()).map(|(x, y)| {
-        match x == y {
-            true => format!("<span>{}</span>", bin_to_char(y)),
-            false => format!("<span foreground=\"red\">{}</span>", bin_to_char(y)),
-        }
-    }).collect()
+    xs.iter()
+        .zip(ys.iter())
+        .map(|(x, y)| {
+            match x == y {
+                true => format!("<span>{}</span>", bin_to_char(y)),
+                false => format!("<span foreground=\"red\">{}</span>", bin_to_char(y)),
+            }
+        })
+        .collect()
 }
 
 fn encode_main(xs: &str, gs: &str) -> Result<Vec<u8>, Error> {
@@ -138,7 +140,7 @@ fn encode_main(xs: &str, gs: &str) -> Result<Vec<u8>, Error> {
     Ok(cs::encode(&xs, &gs))
 }
 
-fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackResults, Error>{
+fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackResults, Error> {
     // shadow the input params
     let xs = try!(cs::parse_bin(xs));
     let gs = try!(cs::parse_gs(gs));
@@ -147,7 +149,8 @@ fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackRes
 
     let noisy_ys = try!(cs::parse_bin(rx));
     if noisy_ys.len() != ys.len() {
-        return Err(Error::new(ErrorKind::InvalidInput, "Transmitted and received bits have different lengths"));
+        return Err(Error::new(ErrorKind::InvalidInput,
+                              "Transmitted and received bits have different lengths"));
     }
 
     let (path, paths) = cs::decode_(&noisy_ys, &gs, pr);
@@ -158,7 +161,7 @@ fn run_stack_algo(xs: &str, gs: &str, pr: &str, rx: &str) -> Result<cs::StackRes
         encoded: ys,
         received: noisy_ys,
         decoded: path,
-        paths: paths
+        paths: paths,
     })
 }
 
@@ -172,9 +175,7 @@ struct DrawingWindow {
 
 impl DrawingWindow {
     fn new() -> DrawingWindow {
-        DrawingWindow {
-            shared_lvl: Rc::new(RefCell::new(0)),
-        }
+        DrawingWindow { shared_lvl: Rc::new(RefCell::new(0)) }
     }
 
     fn run(&self, res: cs::StackResults) {
@@ -343,14 +344,20 @@ impl DrawingWindow {
         popup.show_all();
     }
 
-    fn draw_path(cr: &cairo::Context, h: f64, lvl: usize, mut path: Vec<u8>, code: &Vec<u8>, mu: f64, l: usize) {
+    fn draw_path(cr: &cairo::Context,
+                 h: f64,
+                 lvl: usize,
+                 mut path: Vec<u8>,
+                 code: &Vec<u8>,
+                 mu: f64,
+                 l: usize) {
         if path.is_empty() {
             cr.rel_move_to(0., -15.); // no need to move back because we're return at the end
             cr.set_font_size(15.);
             cr.set_source_rgb(0., 0., 0.);
             cr.show_text(&format!("{} | {:.2}", &format_bin(code), mu));
             cr.stroke();
-            return
+            return;
         }
 
         let p = path.remove(0);
@@ -362,16 +369,13 @@ impl DrawingWindow {
         if lvl > l {
             cr.set_dash(&[], 0.);
             cr.rel_line_to(STEP_PX, 0.);
-        }
-        else if p == 0 {
+        } else if p == 0 {
             cr.set_dash(&[], 0.);
             cr.rel_line_to(STEP_PX, -h);
-        }
-        else if p == 1 {
+        } else if p == 1 {
             cr.set_dash(&[8.0], 0.);
             cr.rel_line_to(STEP_PX, h);
-        }
-        else {
+        } else {
             panic!("Must be 0 or 1");
         }
 
@@ -381,7 +385,7 @@ impl DrawingWindow {
         cr.move_to(x, y);
 
         // recursive step
-        DrawingWindow::draw_path(cr, h, lvl+1, path, code, mu, l)
+        DrawingWindow::draw_path(cr, h, lvl + 1, path, code, mu, l)
     }
 }
 
@@ -444,10 +448,12 @@ impl MainWindow {
         sep_tx.set_margin_bottom(sep_margin);
 
         // received
-        let lbl_rx = gtk::Label::new(Some("Received bits,\nrandomise the bits by clicking the icon."));
+        let lbl_rx = gtk::Label::new(Some("Received bits,\n\
+                                           randomise the bits by clicking the icon."));
         let ent_rx = gtk::Entry::new_with_buffer(&gtk::EntryBuffer::new(None));
         let btn_rx = gtk::Button::new_from_icon_name("media-playlist-shuffle", 2);
-        btn_rx.set_tooltip_text(Some("Randomise the received code based on the transmitted code and the error probability, assuming a BSC."));
+        btn_rx.set_tooltip_text(Some("Randomise the received code based on the transmitted code \
+                                      and the error probability, assuming a BSC."));
         let sep_rx = gtk::Separator::new(Orientation::Horizontal);
         lbl_rx.set_halign(Align::Start);
         sep_rx.set_valign(Align::Center);

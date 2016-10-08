@@ -16,7 +16,7 @@ pub fn parse_bin(xs: &str) -> Result<Vec<u8>, Error> {
             '0' => res.push(0),
             '1' => res.push(1),
             ' ' => (),
-            _   => return Err(Error::new(ErrorKind::InvalidInput, "Invalid input, must be 0 or 1"))
+            _ => return Err(Error::new(ErrorKind::InvalidInput, "Invalid input, must be 0 or 1")),
         }
     }
     Ok(res)
@@ -148,7 +148,11 @@ pub fn decode_(obs: &Vec<u8>, gs: &Gens, p: f64) -> (Vec<u8>, Vec<CodePath>) {
     let mut progress = Vec::new();
 
     // the single node path
-    heap.push(CodePath { path: Vec::new(), code: Vec::new(), mu: 0f64 });
+    heap.push(CodePath {
+        path: Vec::new(),
+        code: Vec::new(),
+        mu: 0f64,
+    });
 
     // loop until a complete path is found
     loop {
@@ -237,7 +241,7 @@ impl CodePath {
         let r = 1f64 / gs.n as f64;
         let _idx = self.path.len() - 1;
         let _xs = encode_step(&self.path, gs, _idx);
-        let _ys = &ys[_idx*gs.n .. (_idx+1)*gs.n];
+        let _ys = &ys[_idx * gs.n..(_idx + 1) * gs.n];
 
         // mu is the fano metric for one iteration
         let mut mu = 0f64;
@@ -262,13 +266,10 @@ pub fn create_noise(xs: &[u8], p: f64) -> Vec<u8> {
     use std::u32;
     assert!(p > 0f64 && p < 1f64);
     let scaled_p = (p * u32::MAX as f64) as u32; // better to compute using Rational
-    xs.clone().into_iter().map(|&y| {
-        if random::<u32>() < scaled_p {
-            1 - y
-        } else {
-            y
-        }
-    }).collect()
+    xs.clone()
+        .into_iter()
+        .map(|&y| { if random::<u32>() < scaled_p { 1 - y } else { y } })
+        .collect()
 }
 
 fn f64_eq(a: &f64, b: &f64, eps: &f64) -> bool {
@@ -293,18 +294,20 @@ fn test_encode1() {
 fn test_encode2() {
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
     let xs1 = vec![1, 1, 1, 0];
-    assert_eq!(encode(&xs1, &gs), vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0]);
+    assert_eq!(encode(&xs1, &gs),
+               vec![1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0]);
 
     let xs2 = vec![1, 0, 1, 0];
-    assert_eq!(encode(&xs2, &gs), vec![1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
+    assert_eq!(encode(&xs2, &gs),
+               vec![1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0]);
 }
 
 #[test]
 fn test_decode_and_fano() {
-    let obs = vec![0,0,1,0,0,1,0,1,1,1,0,1];
+    let obs = vec![0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
-    let p = 1f64/16f64;
-    assert_eq!(vec![1,1], decode(&obs, &gs, p));
+    let p = 1f64 / 16f64;
+    assert_eq!(vec![1, 1], decode(&obs, &gs, p));
 
     // using the same params we can test the fano metric too
     let best = decode_(&obs, &gs, p).1.pop().unwrap();
@@ -320,7 +323,7 @@ fn test_noise() {
     let p = 0.1;
     let len = create_noise(&[0; CNT], 0.1)
         .into_iter()
-        .filter(|&x| x == 1 )
+        .filter(|&x| x == 1)
         .collect::<Vec<u8>>()
         .len();
     assert!(f64_eq(&p, &(len as f64 / CNT as f64), &1e-3))
@@ -329,9 +332,9 @@ fn test_noise() {
 #[test]
 fn test_system() {
     // TODO randomise these
-    let orig = vec![0,1,0,1];
+    let orig = vec![0, 1, 0, 1];
     let gs = Gens::new(vec![vec![1, 1, 1], vec![1, 1, 0], vec![1, 0, 1]]);
-    let p = 1f64/10f64;
+    let p = 1f64 / 10f64;
 
     let ys = create_noise(&encode(&orig, &gs), p);
     // println!("ys {:?}", ys);
