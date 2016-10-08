@@ -1,6 +1,9 @@
 # convolutional-stack
 Visualisation of the stack decoding algorithm used for convolutional codes.
 
+# Screenshot
+![screenshot](./screenshot.png)
+
 # Install on Linux
 * `gtk-rs` is used, install the [requirements](http://gtk-rs.org/docs/requirements.html), on Fedora that is `sudo dnf install gtk3-devel glib2-devel`.
 * Use `cargo` to build and run.
